@@ -1,0 +1,497 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:board="using:SETBoard.Board"
+        x:Class="SETBoard.MainWindow"
+        Title="SETBoard 白板"
+        Width="1280" Height="800"
+        MinWidth="960" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        WindowState="FullScreen"
+        Background="#0C1B24"
+        RequestedThemeVariant="Dark"
+        FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
+        KeyDown="OnWindowKeyDown">
+
+  <Window.Styles>
+    <!-- 底部悬浮面板：胶囊型磨砂玻璃（静态磨砂，不做实时采样，零额外渲染开销） -->
+    <Style Selector="ContentControl.panel">
+      <Setter Property="Background">
+        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+          <GradientStop Offset="0" Color="#CD243441" />
+          <GradientStop Offset="0.55" Color="#C0192733" />
+          <GradientStop Offset="1" Color="#D8111B25" />
+        </LinearGradientBrush>
+      </Setter>
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel>
+            <!-- 玻璃底 + 外阴影 + 顶部内高光 -->
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="#30FFFFFF"
+                    BorderThickness="1"
+                    CornerRadius="{TemplateBinding CornerRadius}"
+                    BoxShadow="0 12 30 0 #70000000, inset 0 1 0 0 #26FFFFFF" />
+
+            <Border CornerRadius="{TemplateBinding CornerRadius}"
+                    ClipToBounds="True"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}" />
+            </Border>
+          </Panel>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.divider">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="Background" Value="#33424D" />
+      <Setter Property="Margin" Value="5,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 工具按钮：图标 + 文字 -->
+    <Style Selector="Button.tool">
+      <Setter Property="Width" Value="68" />
+      <Setter Property="Height" Value="58" />
+      <Setter Property="Padding" Value="0,7,0,5" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="29" />
+      <Setter Property="Foreground" Value="#B9C8D3" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.15" />
+          <BrushTransition Property="Foreground" Duration="0:0:0.15" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.tool:pointerover">
+      <Setter Property="Background" Value="#2A3842" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.tool:pressed">
+      <Setter Property="Background" Value="#22303A" />
+    </Style>
+    <Style Selector="Button.tool.active">
+      <Setter Property="Background" Value="#33424E" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.tool.active:pointerover">
+      <Setter Property="Background" Value="#3B4B58" />
+    </Style>
+    <Style Selector="Button.tool:disabled">
+      <Setter Property="Opacity" Value="0.32" />
+    </Style>
+
+    <!-- Fluent 图标字体 -->
+    <Style Selector="TextBlock.icon">
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="LineHeight" Value="22" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <!-- 形状工具仍使用矢量图标 -->
+    <Style Selector="Path.icon">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Stroke" Value="#C3D1DB" />
+      <Setter Property="StrokeThickness" Value="1.7" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+      <Setter Property="Fill" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tool.active Path.icon">
+      <Setter Property="Stroke" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.tool:pointerover Path.icon">
+      <Setter Property="Stroke" Value="#FFFFFF" />
+    </Style>
+
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,5,0,0" />
+    </Style>
+
+    <!-- 翻页 -->
+    <Style Selector="Button.pager">
+      <Setter Property="Width" Value="38" />
+      <Setter Property="Height" Value="46" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="23" />
+      <Setter Property="Foreground" Value="#B9C8D3" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.15" />
+          <BrushTransition Property="Foreground" Duration="0:0:0.15" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.pager:pointerover">
+      <Setter Property="Background" Value="#2A3842" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.pager:pressed">
+      <Setter Property="Background" Value="#22303A" />
+    </Style>
+    <Style Selector="Button.pager:disabled">
+      <Setter Property="Opacity" Value="0.3" />
+    </Style>
+    <Style Selector="TextBlock.chevron">
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+      <Setter Property="FontSize" Value="19" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 二级选项菜单：淡入 + 上浮 -->
+    <Style Selector="ContentControl#InkOptions">
+      <Setter Property="RenderTransform" Value="translateY(0px)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.16" Easing="CubicEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <!-- Toast：淡入淡出 -->
+    <Style Selector="Border#Toast">
+      <Setter Property="RenderTransform" Value="translateY(0px)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.18" Easing="CubicEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <!-- 颜色 -->
+    <Style Selector="Button.swatch">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="13" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Margin" Value="2,0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.swatch.active">
+      <Setter Property="BorderBrush" Value="#FFFFFF" />
+    </Style>
+
+    <!-- 笔迹粗细滑块 -->
+    <Style Selector="Slider.inksize">
+      <Setter Property="Width" Value="150" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Margin" Value="12,0,16,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TickFrequency" Value="0" />
+    </Style>
+
+    <!-- 形状选择 -->
+    <Style Selector="Button.shape">
+      <Setter Property="Width" Value="34" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.shape:pointerover">
+      <Setter Property="Background" Value="#2A3842" />
+    </Style>
+    <Style Selector="Button.shape.active">
+      <Setter Property="Background" Value="#33424E" />
+    </Style>
+    <Style Selector="Path.smallicon">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Stroke" Value="#C3D1DB" />
+      <Setter Property="StrokeThickness" Value="1.7" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+      <Setter Property="Fill" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.shape.active Path.smallicon">
+      <Setter Property="Stroke" Value="#FFFFFF" />
+    </Style>
+
+    <!-- 右上角缩放 -->
+    <Style Selector="Button.zoom">
+      <Setter Property="Padding" Value="12,5" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.zoom:pointerover">
+      <Setter Property="Background" Value="#2A3842" />
+    </Style>
+
+    <!-- 弹出菜单 -->
+    <Style Selector="MenuFlyoutPresenter">
+      <Setter Property="Background" Value="#1E2A33" />
+      <Setter Property="BorderBrush" Value="#33424D" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="6" />
+    </Style>
+    <Style Selector="MenuItem">
+      <Setter Property="Foreground" Value="#D5DFE6" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="CornerRadius" Value="14" />
+    </Style>
+    <Style Selector="MenuItem:pointerover">
+      <Setter Property="Background" Value="#2C3A45" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="ToolTip">
+      <Setter Property="Background" Value="#1E2A33" />
+      <Setter Property="BorderBrush" Value="#33424D" />
+      <Setter Property="Foreground" Value="#D5DFE6" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+  </Window.Styles>
+
+  <Panel x:Name="RootPanel">
+    <board:BoardCanvas x:Name="Board" />
+
+    <TextBlock x:Name="EmptyHint"
+               IsHitTestVisible="False"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               Text="用触控笔、手指或鼠标直接书写"
+               FontSize="17"
+               Foreground="#41596A" />
+
+    <!-- 右上角缩放 -->
+    <Border HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,16,18,0"
+            Background="#B3152430"
+            BorderBrush="#2B3A45"
+            BorderThickness="1"
+            CornerRadius="10">
+      <Button x:Name="ZoomButton" Classes="zoom" Click="OnZoomResetClick" ToolTip.Tip="点击恢复 100%">
+        <TextBlock x:Name="ZoomText" Text="100%" Foreground="#9FB4C1" FontSize="12" />
+      </Button>
+    </Border>
+
+    <!-- 底部三组悬浮面板 -->
+    <Grid VerticalAlignment="Bottom" Margin="18,0,18,18" ColumnDefinitions="Auto,*,Auto">
+      <!-- 左：退出 / 最小化 / 菜单 -->
+      <ContentControl Grid.Column="0" Classes="panel" CornerRadius="35"
+                      HorizontalAlignment="Left" VerticalAlignment="Bottom">
+        <StackPanel Orientation="Horizontal">
+          <Button Classes="tool" Click="OnExitClick" ToolTip.Tip="退出">
+            <StackPanel>
+              <TextBlock Classes="icon" Text="&#xE7E8;" />
+              <TextBlock Classes="label" Text="退出" />
+            </StackPanel>
+          </Button>
+
+          <Button Classes="tool" Click="OnMinimizeClick" ToolTip.Tip="最小化到桌面浮窗">
+            <StackPanel>
+              <TextBlock Classes="icon" Text="&#xE921;" />
+              <TextBlock Classes="label" Text="最小化" />
+            </StackPanel>
+          </Button>
+
+          <Button x:Name="MenuButton" Classes="tool" ToolTip.Tip="菜单">
+            <StackPanel>
+              <TextBlock Classes="icon" Text="&#xE700;" />
+              <TextBlock Classes="label" Text="菜单" />
+            </StackPanel>
+            <Button.Flyout>
+              <MenuFlyout Placement="TopEdgeAlignedLeft">
+                <MenuItem Header="打开白板…" Click="OnOpenClick" />
+                <MenuItem Header="保存白板…" Click="OnSaveClick" />
+                <MenuItem Header="导出 PNG 图片…" Click="OnExportClick" />
+                <MenuItem Header="适应内容" Click="OnFitClick" />
+                <MenuItem Header="重置视图" Click="OnZoomResetClick" />
+                <MenuItem x:Name="GridMenuItem" Header="点阵：开" Click="OnGridMenuClick" />
+                <MenuItem Header="清空本页" Click="OnClearClick" />
+                <MenuItem x:Name="DeletePageMenuItem" Header="删除本页" Click="OnDeletePageClick" />
+                <MenuItem Header="全屏 (F11)" Click="OnFullScreenClick" />
+                <MenuItem Header="关于 SETBoard" Click="OnAboutClick" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </StackPanel>
+      </ContentControl>
+
+      <!-- 中：工具 + 撤销恢复 / 墨水选项 -->
+      <StackPanel x:Name="ToolDock" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Bottom" Spacing="8">
+        <ContentControl x:Name="InkOptions" Classes="panel" CornerRadius="20" HorizontalAlignment="Center">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="1" Margin="4,0">
+            <StackPanel x:Name="ShapePicker" Orientation="Horizontal" Spacing="1" IsVisible="False">
+              <Button Classes="shape" Tag="Line" Click="OnShapeClick" ToolTip.Tip="直线">
+                <Path Classes="smallicon" Data="M5 19L19 5" />
+              </Button>
+              <Button Classes="shape" Tag="Arrow" Click="OnShapeClick" ToolTip.Tip="箭头">
+                <Path Classes="smallicon" Data="M5 19L19 5 M13.5 5H19v5.5" />
+              </Button>
+              <Button Classes="shape" Tag="Rectangle" Click="OnShapeClick" ToolTip.Tip="矩形">
+                <Path Classes="smallicon" Data="M4.5 6.5h15v11h-15z" />
+              </Button>
+              <Button Classes="shape" Tag="Ellipse" Click="OnShapeClick" ToolTip.Tip="圆形">
+                <Path Classes="smallicon" Data="M12 4.5a7.5 7.5 0 1 0 0 15a7.5 7.5 0 1 0 0-15" />
+              </Button>
+              <Button Classes="shape" Tag="Triangle" Click="OnShapeClick" ToolTip.Tip="三角形">
+                <Path Classes="smallicon" Data="M12 4.5L20 19.5H4z" />
+              </Button>
+              <Border Classes="divider" />
+            </StackPanel>
+
+            <Button x:Name="WhiteSwatch" Classes="swatch active" Background="#FFFFFF" Tag="FFFFFFFF" Click="OnColorClick" ToolTip.Tip="白色" />
+            <Button x:Name="YellowSwatch" Classes="swatch" Background="#FFD54A" Tag="FFFFD54A" Click="OnColorClick" ToolTip.Tip="黄色" />
+            <Button x:Name="RedSwatch" Classes="swatch" Background="#FF6B6B" Tag="FFFF6B6B" Click="OnColorClick" ToolTip.Tip="红色" />
+            <Button x:Name="GreenSwatch" Classes="swatch" Background="#51CF66" Tag="FF51CF66" Click="OnColorClick" ToolTip.Tip="绿色" />
+            <Button x:Name="BlueSwatch" Classes="swatch" Background="#4DABF7" Tag="FF4DABF7" Click="OnColorClick" ToolTip.Tip="蓝色" />
+            <Button x:Name="GraySwatch" Classes="swatch" Background="#ADB5BD" Tag="FFADB5BD" Click="OnColorClick" ToolTip.Tip="灰色" />
+
+            <Border Classes="divider" />
+
+            <Slider x:Name="InkWidthSlider" Classes="inksize"
+                    Minimum="1" Maximum="16" Value="4"
+                    ToolTip.Tip="笔迹粗细"
+                    ValueChanged="OnInkWidthChanged" />
+
+            <!-- 粗细预览：线宽和颜色跟随当前笔 -->
+            <Border Width="66" Height="34" CornerRadius="10"
+                    Background="#1B2833" BorderBrush="#2EFFFFFF" BorderThickness="1"
+                    Margin="0,0,10,0" VerticalAlignment="Center"
+                    ToolTip.Tip="当前粗细预览">
+              <Border x:Name="InkPreview" Width="46" Height="4" CornerRadius="2"
+                      Background="#FFFFFF"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+          </StackPanel>
+        </ContentControl>
+
+        <ContentControl Classes="panel" CornerRadius="35" HorizontalAlignment="Center">
+          <StackPanel Orientation="Horizontal">
+            <Button x:Name="PenButton" Classes="tool active" Tag="Pen" Click="OnToolClick" ToolTip.Tip="书写 (P)">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE70F;" />
+                <TextBlock Classes="label" Text="书写" />
+              </StackPanel>
+            </Button>
+
+            <Button x:Name="HighlighterButton" Classes="tool" Tag="Highlighter" Click="OnToolClick" ToolTip.Tip="荧光笔 (H)">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE7E6;" />
+                <TextBlock Classes="label" Text="荧光" />
+              </StackPanel>
+            </Button>
+
+            <Button x:Name="EraserButton" Classes="tool" Tag="Eraser" Click="OnToolClick" ToolTip.Tip="橡皮 (E)">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE75C;" />
+                <TextBlock Classes="label" Text="擦除" />
+              </StackPanel>
+            </Button>
+
+            <Button x:Name="SelectButton" Classes="tool" Tag="Select" Click="OnToolClick" ToolTip.Tip="选择 (V)">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE8B3;" />
+                <TextBlock Classes="label" Text="选择" />
+              </StackPanel>
+            </Button>
+
+            <Button x:Name="ShapeButton" Classes="tool" Click="OnShapeButtonClick" ToolTip.Tip="形状">
+              <StackPanel>
+                <Path Classes="icon" Data="M3.5 19.5L9 8l5.5 11.5z M14.5 13.5h6v6h-6z" />
+                <TextBlock Classes="label" Text="形状" />
+              </StackPanel>
+            </Button>
+
+            <Button x:Name="ImageButton" Classes="tool" Click="OnInsertImageClick" ToolTip.Tip="插入图片">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE8B9;" />
+                <TextBlock Classes="label" Text="图片" />
+              </StackPanel>
+            </Button>
+
+            <Border Classes="divider" />
+
+            <Button x:Name="UndoButton" Classes="tool" Click="OnUndoClick" ToolTip.Tip="撤销 (Ctrl+Z)">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE7A7;" />
+                <TextBlock Classes="label" Text="撤销" />
+              </StackPanel>
+            </Button>
+
+            <Button x:Name="RedoButton" Classes="tool" Click="OnRedoClick" ToolTip.Tip="恢复 (Ctrl+Y)">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE7A6;" />
+                <TextBlock Classes="label" Text="恢复" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </ContentControl>
+      </StackPanel>
+
+      <!-- 右：页码导航 -->
+      <ContentControl Grid.Column="2" Classes="panel" CornerRadius="29"
+                      HorizontalAlignment="Right" VerticalAlignment="Bottom">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="PrevPageButton" Classes="pager" Click="OnPrevPageClick" ToolTip.Tip="上一页">
+            <TextBlock Classes="chevron" Text="&#xE76B;" />
+          </Button>
+          <TextBlock x:Name="PageText"
+                     Text="1/1"
+                     Width="58"
+                     TextAlignment="Center"
+                     VerticalAlignment="Center"
+                     Foreground="#D5DFE6"
+                     FontSize="13" />
+          <Button x:Name="NextPageButton" Classes="pager" Click="OnNextPageClick" ToolTip.Tip="下一页">
+            <TextBlock Classes="chevron" Text="&#xE76C;" />
+          </Button>
+          <Border Classes="divider" />
+          <Button x:Name="AddPageButton" Classes="pager" Click="OnAddPageClick" ToolTip.Tip="新建页面">
+            <TextBlock Classes="chevron" Text="&#xE710;" />
+          </Button>
+        </StackPanel>
+      </ContentControl>
+    </Grid>
+
+    <!-- 提示条 -->
+    <Border x:Name="Toast"
+            IsVisible="False"
+            Background="#F21D2A34"
+            BorderBrush="#3A4A56"
+            BorderThickness="1"
+            CornerRadius="11"
+            Padding="18,9"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Margin="0,18,0,0">
+      <TextBlock x:Name="ToastText" Foreground="#E8EFF4" FontSize="13" />
+    </Border>
+  </Panel>
+</Window>
