@@ -92,6 +92,9 @@
   .btn-line:hover{border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.05)}
   .btn-sm{height:36px;padding:0 16px;font-size:12.5px;font-weight:500;border-color:rgba(255,255,255,.16);color:var(--muted)}
   .btn-sm:hover{border-color:rgba(255,255,255,.38);color:var(--text)}
+  .btn-replay{background:transparent;border-color:transparent;color:var(--dim);padding:0 12px}
+  .btn-replay svg{width:15px;height:15px;flex:none}
+  .btn-replay:hover{color:var(--text);background:rgba(255,255,255,.05)}
 
   /* ---------- 首屏：文字压住画面左侧，板面出血到右边 ---------- */
   .hero{
@@ -147,6 +150,11 @@
   @keyframes draw{to{stroke-dashoffset:0}}
   .board .fade{opacity:0;animation:fadeUp .9s var(--ease) forwards}
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* 重播：去掉 .playing 时把首屏所有入场动画复位，加回来即重新播放 */
+  .hero:not(.playing) .board .draw{animation:none;stroke-dashoffset:var(--len,900)}
+  .hero:not(.playing) .board .fade{animation:none;opacity:0}
+  .hero:not(.playing) h1 em::after{animation:none;transform:scaleX(0)}
 
   /* ---------- 通用段落 ---------- */
   section{position:relative;z-index:2}
@@ -243,6 +251,7 @@
     html{scroll-behavior:auto}
     *,*::before,*::after{animation-duration:.001ms !important;animation-delay:0ms !important;transition-duration:.001ms !important}
     [data-reveal]{opacity:1;transform:none}
+    .btn-replay{display:none}
   }
 </style>
 </head>
@@ -262,7 +271,7 @@
 
 <main>
   <!-- 首屏 -->
-  <section class="hero">
+  <section class="hero playing">
     <div class="hero-copy">
       <p class="eyebrow mono">Windows · 触屏教学白板</p>
       <h1>把黑板<br>装进<em>触摸屏</em></h1>
@@ -270,6 +279,13 @@
       <div class="actions">
         <a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/releases/latest">下载 Windows 版</a>
         <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">查看源码</a>
+        <button class="btn btn-replay" type="button" id="replayHero" aria-label="重播首屏动画">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13.6 8a5.6 5.6 0 1 1-1.95-4.27" />
+            <path d="M13.6 2.6v3.5h-3.5" />
+          </svg>
+          重播动画
+        </button>
       </div>
       <p class="meta mono">Windows 10 / 11 · .NET 9 · Avalonia · 开源免费</p>
     </div>
@@ -466,6 +482,17 @@
   const onScroll = () => bar.classList.toggle("is-stuck", window.scrollY > 24);
   onScroll();
   window.addEventListener("scroll", onScroll, { passive: true });
+
+  // 首屏动画重播：移除 .playing 复位，强制重排后再加回，动画从头播放
+  const hero = document.querySelector(".hero");
+  const replay = document.getElementById("replayHero");
+  if (hero && replay) {
+    replay.addEventListener("click", () => {
+      hero.classList.remove("playing");
+      void hero.offsetWidth;
+      hero.classList.add("playing");
+    });
+  }
 
   // 笔锋演示：随滚动进度描绘
   const stroke = document.getElementById("strokeDemo");

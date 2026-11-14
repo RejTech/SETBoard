@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -33,7 +34,7 @@ public partial class MainWindow : Window
 
         _toolButtons = new[]
         {
-            PenButton, HighlighterButton, EraserButton, SelectButton, ShapeButton,
+            PenButton, HighlighterButton, EraserButton, SelectButton, FillButton, ShapeButton,
         };
         _swatches = new[]
         {
@@ -44,10 +45,10 @@ public partial class MainWindow : Window
         Board.DocumentChanged += (_, _) => OnDocumentChanged();
         Board.PageChanged += (_, _) => OnPageChanged();
         Board.History.Changed += (_, _) => UpdateHistoryButtons();
+        Board.DoubleClicked += OnBoardDoubleClicked;
 
         UpdateZoomLabel();
         UpdateHistoryButtons();
-        UpdateEmptyHint();
         UpdatePageLabel();
         UpdateGridMenu();
         SetTool(BoardTool.Pen);
@@ -140,7 +141,6 @@ public partial class MainWindow : Window
     private void OnDocumentChanged()
     {
         MarkDirty();
-        UpdateEmptyHint();
     }
 
     private void MarkDirty()
@@ -153,11 +153,6 @@ public partial class MainWindow : Window
     private void UpdateTitle()
     {
         Title = _dirty ? "SETBoard 白板 *" : "SETBoard 白板";
-    }
-
-    private void UpdateEmptyHint()
-    {
-        EmptyHint.IsVisible = Board.Document.Items.Count == 0;
     }
 
     private void UpdateZoomLabel()
@@ -187,7 +182,6 @@ public partial class MainWindow : Window
     private void OnPageChanged()
     {
         UpdatePageLabel();
-        UpdateEmptyHint();
         UpdateHistoryButtons();
     }
 
@@ -216,6 +210,8 @@ public partial class MainWindow : Window
 
         ShapePicker.IsVisible = isShape;
         SetInkOptionsVisible(false);
+        // 填色要选颜色，直接把色板露出来
+        if (tool == BoardTool.Fill) SetInkOptionsVisible(true);
         UpdateInkPreview();
     }
 
@@ -224,7 +220,7 @@ public partial class MainWindow : Window
 
     /// <summary>当前工具是否有二级选项（颜色 / 粗细 / 形状）。</summary>
     private static bool HasInkOptions(BoardTool tool) =>
-        tool is BoardTool.Pen or BoardTool.Highlighter || IsShapeTool(tool);
+        tool is BoardTool.Pen or BoardTool.Highlighter or BoardTool.Fill || IsShapeTool(tool);
 
     /// <summary>再次点击已选中的工具时，展开或收起二级选项菜单。</summary>
     private void ToggleInkOptions()
@@ -267,6 +263,111 @@ public partial class MainWindow : Window
             SetTool(tool);
             SetInkOptionsVisible(true);
         }
+    }
+
+    /// <summary>形状选项里的「函数」：打开函数对话框，确认后把图像插到视野中央。</summary>
+    private async void OnFunctionClick(object? sender, RoutedEventArgs e)
+    {
+        SetInkOptionsVisible(false);
+        var dialog = new FunctionDialog(null, Board.InkColor, Board.InkWidth);
+        var spec = await dialog.ShowDialog<FunctionSpec?>(this);
+        if (spec is null) return;
+
+        var view = Board.VisibleWorldBounds;
+        double width = Math.Min(view.Width * 0.62, 760);
+        double height = Math.Min(view.Height * 0.58, 460);
+
+        var item = new FunctionItem
+        {
+            XMin = spec.XMin,
+            XMax = spec.XMax,
+            YMin = spec.YMin,
+            YMax = spec.YMax,
+            Color = Board.InkColor,
+            Width = Board.InkWidth,
+            PlotWidth = width,
+            PlotHeight = height,
+            Left = view.Center.X - width / 2,
+            Top = view.Center.Y - height / 2,
+        };
+        item.Curves = ToCurves(spec);
+
+        Board.AddItem(item, select: true);
+        SetTool(BoardTool.Select);
+        MarkDirty();
+        ShowToast(spec.Curves.Count > 1
+            ? $"已插入 {spec.Curves.Count} 条函数曲线，双击可继续编辑"
+            : "已插入函数图像，双击可调参数 a");
+    }
+
+    /// <summary>把对话框结果里的曲线描述转成画布对象使用的曲线。</summary>
+    private static List<FunctionCurve> ToCurves(FunctionSpec spec)
+    {
+        var curves = new List<FunctionCurve>(spec.Curves.Count);
+        foreach (var draft in spec.Curves)
+        {
+            curves.Add(new FunctionCurve
+            {
+                Latex = draft.Latex,
+                Expression = draft.Expression,
+                ParameterA = draft.ParameterA,
+                Color = draft.Color,
+            });
+        }
+
+        return curves;
+    }
+
+    /// <summary>插入三维几何体：选中后拖动可改变观察角度。</summary>
+    private void OnSolidClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string tag } || !Enum.TryParse<SolidKind>(tag, out var kind))
+        {
+            return;
+        }
+
+        var view = Board.VisibleWorldBounds;
+        double size = Math.Clamp(Math.Min(view.Width, view.Height) * 0.32, 80, 460);
+        var item = new SolidItem
+        {
+            Kind = kind,
+            CenterX = view.Center.X,
+            CenterY = view.Center.Y,
+            Size = size,
+            Height = kind switch
+            {
+                SolidKind.Cuboid => size * 0.66,
+                SolidKind.Pyramid => size * 0.95,
+                SolidKind.Cylinder => size * 0.92,
+                _ => size,
+            },
+            Color = Board.InkColor,
+            Width = Board.InkWidth,
+        };
+
+        Board.AddItem(item, select: true);
+        SetTool(BoardTool.Select);
+        MarkDirty();
+        ShowToast("选中状态下拖动几何体可三维旋转");
+    }
+
+    /// <summary>选择工具下双击已有的函数图像，重新打开参数面板修改表达式或 a。</summary>
+    private async void OnBoardDoubleClicked(object? sender, Point world)
+    {
+        if (Board.PickAt(world) is not FunctionItem item) return;
+
+        SetTool(BoardTool.Select);
+        var dialog = new FunctionDialog(item, Board.InkColor, Board.InkWidth);
+        var spec = await dialog.ShowDialog<FunctionSpec?>(this);
+        if (spec is null) return;
+
+        item.Curves = ToCurves(spec);
+        item.XMin = spec.XMin;
+        item.XMax = spec.XMax;
+        item.YMin = spec.YMin;
+        item.YMax = spec.YMax;
+        Board.InvalidateVisual();
+        MarkDirty();
     }
 
     private void OnColorClick(object? sender, RoutedEventArgs e)
@@ -407,9 +508,29 @@ public partial class MainWindow : Window
 
     private void OnFullScreenClick(object? sender, RoutedEventArgs e) => ToggleFullScreen();
 
+    /// <summary>版本号来自 version.json（发版时由 Action 改写），读不到时退回程序集版本。</summary>
+    private static string AppVersion
+    {
+        get
+        {
+            using var stream = typeof(MainWindow).Assembly
+                .GetManifestResourceStream("SETBoard.version.json");
+            if (stream is not null)
+            {
+                using var document = JsonDocument.Parse(stream);
+                if (document.RootElement.TryGetProperty("version", out var value)
+                    && value.GetString() is { Length: > 0 } text)
+                {
+                    return text;
+                }
+            }
+
+            return typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
+        }
+    }
+
     private void OnAboutClick(object? sender, RoutedEventArgs e)
     {
-        var version = typeof(MainWindow).Assembly.GetName().Version;
         var dialog = new Window
         {
             Title = "关于 SETBoard",
@@ -445,7 +566,7 @@ public partial class MainWindow : Window
         });
         panel.Children.Add(new TextBlock
         {
-            Text = $"版本 {version?.ToString(3) ?? "1.0.0"}",
+            Text = $"版本 {AppVersion}",
             FontSize = 12,
             Margin = new Thickness(0, 6, 0, 0),
             Foreground = new SolidColorBrush(Color.Parse("#6F8493")),
@@ -534,7 +655,6 @@ public partial class MainWindow : Window
             Board.ResetView();
             _dirty = false;
             UpdateTitle();
-            UpdateEmptyHint();
             UpdatePageLabel();
             UpdateGridMenu();
             ShowToast("已打开白板");
@@ -633,7 +753,6 @@ public partial class MainWindow : Window
             SetTool(BoardTool.Select);
             _dirty = true;
             UpdateTitle();
-            UpdateEmptyHint();
             ShowToast(inserted > 1 ? $"已插入 {inserted} 张图片" : "已插入图片");
         }
         catch (Exception ex)

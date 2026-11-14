@@ -8,6 +8,8 @@ namespace SETBoard.Board;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(InkStroke), "ink")]
 [JsonDerivedType(typeof(ShapeItem), "shape")]
+[JsonDerivedType(typeof(FunctionItem), "function")]
+[JsonDerivedType(typeof(SolidItem), "solid")]
 [JsonDerivedType(typeof(ImageItem), "image")]
 public abstract class BoardItem
 {

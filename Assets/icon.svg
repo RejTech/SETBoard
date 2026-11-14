@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>SETBoard</title>
+  <rect width="256" height="256" rx="56" fill="#0F6CBD"/>
+  <rect x="38" y="50" width="180" height="156" rx="16" fill="#FFFFFF"/>
+  <g stroke="#D9E8F7" stroke-width="4" stroke-linecap="round">
+    <line x1="52" y1="104" x2="204" y2="104"/>
+    <line x1="52" y1="152" x2="204" y2="152"/>
+  </g>
+  <path d="M54 176C96 186 130 70 194 80" fill="none" stroke="#0F6CBD" stroke-width="18"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="194" cy="80" r="15" fill="#FFB900"/>
+</svg>

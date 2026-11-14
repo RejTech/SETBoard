@@ -10,11 +10,18 @@
     <RootNamespace>SETBoard</RootNamespace>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <TieredPGO>true</TieredPGO>
     <PublishReadyToRun>true</PublishReadyToRun>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+    <!-- 版本号单独放在 version.json，发版时由 Action 改写后编译进程序 -->
+    <EmbeddedResource Include="version.json" LogicalName="SETBoard.version.json" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.23" />

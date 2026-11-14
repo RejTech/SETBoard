@@ -17,6 +17,7 @@ public enum BoardTool
     Rectangle,
     Ellipse,
     Triangle,
+    Fill,
 }
 
 /// <summary>白板画布：无限画布、墨迹、图形、选择与缩放。</summary>
@@ -24,6 +25,9 @@ public sealed partial class BoardCanvas : Control
 {
     private const double MinZoom = 0.15;
     private const double MaxZoom = 6.0;
+
+    /// <summary>橡皮的擦除半径，按屏幕像素固定，缩放时手感一致。</summary>
+    private const double EraseRadiusScreen = 14;
 
     private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
     private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
@@ -63,10 +67,12 @@ public sealed partial class BoardCanvas : Control
     public void SetTool(BoardTool tool)
     {
         Tool = tool;
+        if (tool != BoardTool.Eraser) _eraserScreen = null;
         Cursor = tool switch
         {
             BoardTool.Select => ArrowCursor,
             BoardTool.Eraser => HandCursor,
+            BoardTool.Fill => HandCursor,
             _ => CrossCursor,
         };
         InvalidateVisual();
@@ -258,6 +264,17 @@ public sealed partial class BoardCanvas : Control
     /// <summary>当前可见区域（世界坐标），用于把新内容放到视野中央。</summary>
     public Rect VisibleWorldBounds => VisibleWorldRect();
 
+    /// <summary>按世界坐标从上层往下找命中的对象（用于双击编辑等场景）。</summary>
+    public BoardItem? PickAt(Point world)
+    {
+        for (int i = _document.Items.Count - 1; i >= 0; i--)
+        {
+            if (_document.Items[i].HitTest(world, 8 / _zoom)) return _document.Items[i];
+        }
+
+        return null;
+    }
+
     /// <summary>新增对象并登记到撤销栈；可选择是否立即选中它。</summary>
     public void AddItem(BoardItem item, bool select = false)
     {
@@ -312,6 +329,24 @@ public sealed partial class BoardCanvas : Control
 
         DrawSelection(context);
         DrawMarquee(context);
+        DrawEraserIndicator(context);
+    }
+
+    /// <summary>橡皮的擦除范围指示：与擦除半径等大的圆圈，跟随指针。</summary>
+    private void DrawEraserIndicator(DrawingContext context)
+    {
+        if ((Tool != BoardTool.Eraser && _interaction != Interaction.Erasing)
+            || _eraserScreen is not { } center) return;
+
+        // 板面可能是深色也可能是浅色，圈的颜色跟着反着取，保证看得清
+        var background = Color.FromUInt32(_document.Background);
+        bool dark = background.R * 0.299 + background.G * 0.587 + background.B * 0.114 < 128;
+        byte value = dark ? (byte)0xFF : (byte)0x12;
+        var fill = new SolidColorBrush(Color.FromArgb(0x1A, value, value, value)).ToImmutable();
+        var stroke = new Pen(new SolidColorBrush(Color.FromArgb(0xCC, value, value, value)), 1.2).ToImmutable();
+
+        context.DrawEllipse(fill, stroke, center, EraseRadiusScreen, EraseRadiusScreen);
+        context.DrawEllipse(stroke.Brush, null, center, 1, 1);
     }
 
     /// <summary>点阵背景：深色板面上呈现低对比度网格点。</summary>

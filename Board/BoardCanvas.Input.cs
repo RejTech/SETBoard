@@ -15,6 +15,7 @@ public sealed partial class BoardCanvas
         Marquee,
         Panning,
         Gesture,
+        RotatingSolid,
     }
 
     private Interaction _interaction;
@@ -35,7 +36,19 @@ public sealed partial class BoardCanvas
     private Point _gestureStartCenter;
     private double _gestureStartZoom = 1;
     private Vector _gestureStartOffset;
+    private SolidItem? _rotateTarget;
+    private Point _rotateStart;
+    private double _rotateStartYaw;
+    private double _rotateStartPitch;
     private Point _lastScreenPoint;
+    /// <summary>橡皮光标所在的屏幕坐标，null 表示不显示擦除范围框。</summary>
+    private Point? _eraserScreen;
+    private long _lastClickTick;
+    private Point _lastClickPoint;
+    private int _lastClickPointer = -1;
+
+    /// <summary>选择工具下双击画布（世界坐标），用于打开函数图像的参数面板。</summary>
+    public event EventHandler<Point>? DoubleClicked;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -47,6 +60,26 @@ public sealed partial class BoardCanvas
         var screen = current.Position;
         var world = ToWorld(screen);
         var pointerType = e.Pointer.Type;
+
+        // 双击检测：触屏的双击容易误触，只认笔和鼠标
+        if (Tool == BoardTool.Select && pointerType != PointerType.Touch)
+        {
+            long now = Environment.TickCount64;
+            if (now - _lastClickTick <= 400 && _lastClickPointer == e.Pointer.Id
+                && Math.Abs(screen.X - _lastClickPoint.X) <= 14
+                && Math.Abs(screen.Y - _lastClickPoint.Y) <= 14)
+            {
+                _lastClickTick = 0;
+                _lastClickPointer = -1;
+                DoubleClicked?.Invoke(this, world);
+            }
+            else
+            {
+                _lastClickTick = now;
+                _lastClickPointer = e.Pointer.Id;
+                _lastClickPoint = screen;
+            }
+        }
 
         // 触控笔优先：笔尖按下时忽略手掌/手指触摸
         if (pointerType == PointerType.Touch)
@@ -115,6 +148,9 @@ public sealed partial class BoardCanvas
                 case BoardTool.Highlighter:
                     StartInk(world, 1.0, true);
                     break;
+                case BoardTool.Fill:
+                    FillAt(world, screen);
+                    break;
                 default:
                     StartShape(world);
                     break;
@@ -127,10 +163,25 @@ public sealed partial class BoardCanvas
         InvalidateVisual();
     }
 
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        if (_eraserScreen is null) return;
+        _eraserScreen = null;
+        InvalidateVisual();
+    }
+
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
         var screen = e.GetPosition(this);
+
+        // 橡皮的擦除范围框跟随指针，按下擦除时同样可见
+        if (Tool == BoardTool.Eraser || _interaction == Interaction.Erasing)
+        {
+            _eraserScreen = screen;
+            InvalidateVisual();
+        }
 
         if (e.Pointer.Type == PointerType.Touch && _touchPoints.ContainsKey(e.Pointer.Id))
         {
@@ -186,6 +237,16 @@ public sealed partial class BoardCanvas
                 _marqueeCurrent = screen;
                 InvalidateVisual();
                 break;
+
+            case Interaction.RotatingSolid:
+            {
+                if (_rotateTarget is null) break;
+                var delta = screen - _rotateStart;
+                _rotateTarget.Yaw = _rotateStartYaw + delta.X * 0.55;
+                _rotateTarget.Pitch = _rotateStartPitch + delta.Y * 0.45;
+                InvalidateVisual();
+                break;
+            }
 
             case Interaction.Panning:
             {
@@ -326,6 +387,17 @@ public sealed partial class BoardCanvas
         bool additive = (modifiers & KeyModifiers.Control) != 0;
         var hit = PickItem(world, 8 / _zoom);
 
+        // 已选中的立体图形再拖动就是三维旋转，未选中时拖动仍然是移动
+        if (hit is SolidItem solid && _selection.Contains(solid))
+        {
+            _interaction = Interaction.RotatingSolid;
+            _rotateTarget = solid;
+            _rotateStart = screen;
+            _rotateStartYaw = solid.Yaw;
+            _rotateStartPitch = solid.Pitch;
+            return;
+        }
+
         if (hit is not null)
         {
             if (!_selection.Contains(hit))
@@ -365,7 +437,7 @@ public sealed partial class BoardCanvas
 
     private void EraseAt(Point world)
     {
-        double radius = 14 / _zoom;
+        double radius = EraseRadiusScreen / _zoom;
         bool changed = false;
 
         for (int i = _document.Items.Count - 1; i >= 0; i--)
@@ -453,6 +525,19 @@ public sealed partial class BoardCanvas
                 _moveTotal = default;
                 break;
 
+            case Interaction.RotatingSolid:
+                if (_rotateTarget is not null
+                    && (Math.Abs(_rotateTarget.Yaw - _rotateStartYaw) > 0.01
+                        || Math.Abs(_rotateTarget.Pitch - _rotateStartPitch) > 0.01))
+                {
+                    History.Push(new RotateSolidCommand(_rotateTarget,
+                        _rotateStartYaw, _rotateStartPitch, _rotateTarget.Yaw, _rotateTarget.Pitch));
+                    DocumentChanged?.Invoke(this, EventArgs.Empty);
+                }
+
+                _rotateTarget = null;
+                break;
+
             case Interaction.Marquee:
             {
                 var rect = new Rect(_marqueeStart, _marqueeCurrent).Normalize();
@@ -507,6 +592,7 @@ public sealed partial class BoardCanvas
 
         _liveStroke = null;
         _previewShape = null;
+        _rotateTarget = null;
         _interaction = Interaction.None;
         _activePointerId = 0;
         InvalidateVisual();

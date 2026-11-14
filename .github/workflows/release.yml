@@ -21,6 +21,14 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - name: 写入版本号
+        run: |
+          $version = "1.0.${{ github.run_number }}"
+          $json = @{ version = $version } | ConvertTo-Json
+          [System.IO.File]::WriteAllText("$PWD/version.json", $json, (New-Object System.Text.UTF8Encoding($false)))
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+        shell: pwsh
+
       - name: 发布 win-x64 单文件
         run: >
           dotnet publish SETBoard.csproj
@@ -33,10 +41,7 @@ jobs:
           -o publish
 
       - name: 打包
-        run: |
-          $version = "1.0.${{ github.run_number }}"
-          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Compress-Archive -Path publish/* -DestinationPath "SETBoard-v$version-win-x64.zip"
+        run: Compress-Archive -Path publish/* -DestinationPath "SETBoard-v$env:VERSION-win-x64.zip"
         shell: pwsh
 
       - name: 创建 Release

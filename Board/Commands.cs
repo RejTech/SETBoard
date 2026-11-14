@@ -109,3 +109,55 @@ public sealed class MoveItemsCommand : IBoardCommand
         foreach (var item in _items) item.Translate(_delta);
     }
 }
+
+/// <summary>立体图形的三维旋转（偏航、俯仰）。</summary>
+public sealed class RotateSolidCommand : IBoardCommand
+{
+    private readonly SolidItem _item;
+    private readonly double _oldYaw;
+    private readonly double _oldPitch;
+    private readonly double _newYaw;
+    private readonly double _newPitch;
+
+    public RotateSolidCommand(SolidItem item, double oldYaw, double oldPitch, double newYaw, double newPitch)
+    {
+        _item = item;
+        _oldYaw = oldYaw;
+        _oldPitch = oldPitch;
+        _newYaw = newYaw;
+        _newPitch = newPitch;
+    }
+
+    public void Undo(BoardDocument document)
+    {
+        _item.Yaw = _oldYaw;
+        _item.Pitch = _oldPitch;
+    }
+
+    public void Redo(BoardDocument document)
+    {
+        _item.Yaw = _newYaw;
+        _item.Pitch = _newPitch;
+    }
+}
+
+/// <summary>给三维几何体的某个面填色或清除填色。</summary>
+public sealed class FillSolidFaceCommand : IBoardCommand
+{
+    private readonly SolidItem _item;
+    private readonly int _face;
+    private readonly uint? _oldColor;
+    private readonly uint? _newColor;
+
+    public FillSolidFaceCommand(SolidItem item, int face, uint? oldColor, uint? newColor)
+    {
+        _item = item;
+        _face = face;
+        _oldColor = oldColor;
+        _newColor = newColor;
+    }
+
+    public void Undo(BoardDocument document) => _item.SetFaceColor(_face, _oldColor);
+
+    public void Redo(BoardDocument document) => _item.SetFaceColor(_face, _newColor);
+}

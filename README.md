@@ -8,7 +8,10 @@
 
 **书写**
 
-- 书写、荧光笔、橡皮、选择、形状（直线 / 箭头 / 矩形 / 圆形 / 三角形）、插入图片
+- 书写、荧光笔、橡皮、选择、形状（直线 / 箭头 / 矩形 / 圆形 / 三角形）、函数图像、三维几何体、插入图片
+- 函数图像：LaTeX 输入（`\frac{1}{1+x^2}`、`\sqrt{x}`、`\sin(a x)`）并按数学排版显示；同一个坐标系里可叠加多条曲线，每条自动分配不同颜色、各自用滑块调节参数 a；内置一次函数、二次函数、幂函数、指数函数、对数函数预设；自带数学键盘；曲线之间的交点会自动用圆点标出
+- 三维几何体：正方体、长方体、四棱锥、圆柱、圆锥、球，按教材画法用实线画可见棱、虚线画被遮挡的棱；选中后拖动即可改变视角做三维旋转；用「填色」工具点某个面可单面填色，再点一次清除
+- 填色工具对手绘同样有效：点手绘笔画围出的闭合区域即可上色（泛洪填充，未闭合则不填），填色垫在笔画下方，不影响线条
 - 白、黄、红、绿、蓝、灰六色快捷色板，1–16 级粗细调节并带实时预览
 - 压感与笔速参与粗细计算，配合半径限速、首尾收锋、向心 Catmull-Rom 曲线加密，得到自然的笔锋而不是折线拼接
 - 触控笔落笔时自动屏蔽手指/手掌触摸，避免误画
@@ -62,15 +65,23 @@ dotnet publish -c Release -r win-x64 --self-contained false
 Board/
   BoardCanvas.cs          画布渲染、相机、离屏导出
   BoardCanvas.Input.cs    鼠标 / 触控笔 / 触摸交互与手势
+  BoardCanvas.Fill.cs     填色：三维面填充与手绘闭合区域泛洪填充
   BoardCanvas.RawInput.cs Win32 直读输入的落笔通道
   RawPointerInput.cs      WM_POINTER / WM_TOUCH 子类化直读
   InkStroke.cs            笔迹几何：压感、收锋、曲线加密、胶囊拼合
   ShapeItem.cs            图形对象
+  FunctionItem.cs         函数图像：多曲线采样、坐标轴、渐近线断开、交点标记
+  SolidItem.cs            三维几何体：正交投影、隐藏棱虚线、旋转
+  MathExpression.cs       函数表达式解析与求值
+  LatexMath.cs            LaTeX 转求值表达式
   ImageItem.cs            图片对象
   BoardDocument.cs        文档模型与 .setb 序列化
   Commands.cs             撤销 / 重做栈
 MainWindow.axaml(.cs)     主界面与工具条
+FunctionDialog.cs         函数图像对话框与数学键盘
+Assets/icon.ico           应用图标（icon.svg 为矢量源文件）
 DesktopInk.cs             桌面工具条与桌面批注层
+version.json              版本号（发版时由 Action 自动改写）
 ```
 
 ## 许可
