@@ -1,0 +1,52 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: 发布 win-x64 单文件
+        run: >
+          dotnet publish SETBoard.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=none
+          -o publish
+
+      - name: 打包
+        run: |
+          $version = "1.0.${{ github.run_number }}"
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Compress-Archive -Path publish/* -DestinationPath "SETBoard-v$version-win-x64.zip"
+        shell: pwsh
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: SETBoard v${{ env.VERSION }}
+          files: |
+            SETBoard-v${{ env.VERSION }}-win-x64.zip
+            publish/SETBoard.exe
+          generate_release_notes: true
+          draft: false
+          prerelease: false
