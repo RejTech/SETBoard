@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SETBoard — 把黑板装进触摸屏</title>
+<meta name="description" content="SETBoard 是为电子白板与触控一体机开发的轻量教学白板：压感笔锋、桌面批注、分页导出，落笔就跟手。" />
+<meta name="theme-color" content="#0A171F" />
+<style>
+  :root{
+    --bg:#0A171F;
+    --bg-deep:#071219;
+    --surface:#12232E;
+    --line:rgba(255,255,255,.085);
+    --text:#F2F6F9;
+    --muted:#8FA6B4;
+    --dim:#5F7684;
+    --accent:#FFD54A;
+    --radius:14px;
+    --pad:clamp(20px,5vw,72px);
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Source Han Sans SC","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--accent);color:#12180f}
+
+  .mono{
+    font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* 环境光：黑板的轻微反光，避免纯色死板 */
+  .ambient{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(120% 70% at 78% -10%, rgba(58,96,112,.34), transparent 60%),
+      radial-gradient(90% 60% at 6% 108%, rgba(30,62,78,.42), transparent 62%);
+  }
+  .grain{
+    position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.35;
+    background-image:radial-gradient(rgba(255,255,255,.055) 1px, transparent 1px);
+    background-size:26px 26px;
+    mask-image:linear-gradient(180deg, rgba(0,0,0,.9), transparent 85%);
+  }
+
+  /* ---------- 顶栏（覆盖在首屏之上，不占额外高度） ---------- */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;z-index:20;
+    display:flex;align-items:center;gap:28px;
+    padding:22px var(--pad);
+    transition:background .35s var(--ease), backdrop-filter .35s var(--ease), border-color .35s var(--ease);
+    border-bottom:1px solid transparent;
+  }
+  .topbar.is-stuck{
+    background:rgba(9,20,27,.82);
+    backdrop-filter:blur(14px);
+    border-bottom-color:var(--line);
+    padding-top:14px;padding-bottom:14px;
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;font-weight:650;letter-spacing:-.01em;font-size:17px}
+  .brand span{font-size:11px;font-weight:400;letter-spacing:.16em;color:var(--dim)}
+  .topnav{display:flex;gap:26px;margin-left:auto;font-size:13px;color:var(--muted)}
+  .topnav a{position:relative;padding:4px 0;transition:color .25s}
+  .topnav a::after{
+    content:"";position:absolute;left:0;bottom:0;height:1px;width:100%;
+    background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ease);
+  }
+  .topnav a:hover{color:var(--text)}
+  .topnav a:hover::after{transform:scaleX(1)}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    height:46px;padding:0 22px;border-radius:999px;
+    font-size:14px;font-weight:550;letter-spacing:.01em;
+    border:1px solid transparent;cursor:pointer;
+    transition:transform .3s var(--ease), background .3s, border-color .3s, color .3s;
+  }
+  .btn:active{transform:scale(.98)}
+  .btn-primary{background:var(--accent);color:#141a10}
+  .btn-primary:hover{background:#ffe27a;transform:translateY(-1px)}
+  .btn-line{border-color:rgba(255,255,255,.22);color:var(--text)}
+  .btn-line:hover{border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.05)}
+  .btn-sm{height:36px;padding:0 16px;font-size:12.5px;font-weight:500;border-color:rgba(255,255,255,.16);color:var(--muted)}
+  .btn-sm:hover{border-color:rgba(255,255,255,.38);color:var(--text)}
+
+  /* ---------- 首屏：文字压住画面左侧，板面出血到右边 ---------- */
+  .hero{
+    position:relative;z-index:2;
+    min-height:100svh;
+    display:flex;align-items:center;
+    padding:120px var(--pad) 64px;
+    isolation:isolate;
+  }
+  .hero-copy{max-width:620px;position:relative;z-index:2}
+  .eyebrow{
+    margin:0 0 26px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);display:flex;align-items:center;gap:12px;
+  }
+  .eyebrow::before{content:"";width:34px;height:1px;background:currentColor;opacity:.7}
+
+  h1{
+    margin:0;
+    font-size:clamp(2.9rem,6.6vw,5.6rem);
+    line-height:1.02;
+    letter-spacing:-.035em;
+    font-weight:700;
+  }
+  h1 em{font-style:normal;position:relative;white-space:nowrap}
+  h1 em::after{
+    content:"";position:absolute;left:-.04em;right:-.04em;bottom:.06em;height:.34em;
+    background:var(--accent);opacity:.92;z-index:-1;border-radius:2px;
+    transform:scaleX(0);transform-origin:left;
+    animation:sweep 1.1s var(--ease) .85s forwards;
+  }
+  @keyframes sweep{to{transform:scaleX(1)}}
+
+  .lede{
+    margin:28px 0 0;max-width:44ch;
+    font-size:clamp(15px,1.35vw,17px);line-height:1.75;color:var(--muted);
+  }
+  .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:38px}
+  .meta{margin:26px 0 0;font-size:12px;color:var(--dim);letter-spacing:.04em}
+
+  /* 板面 */
+  .hero-visual{
+    position:absolute;z-index:1;
+    right:calc(var(--pad) * -.5);
+    top:50%;transform:translateY(-50%);
+    width:min(66vw,1040px);
+    pointer-events:none;
+  }
+  .board{width:100%;height:auto;display:block;filter:drop-shadow(0 40px 80px rgba(0,0,0,.55))}
+  .board .chalk{
+    fill:none;stroke:#EDF4F8;stroke-linecap:round;stroke-linejoin:round;
+  }
+  .board .draw{stroke-dasharray:var(--len,900);stroke-dashoffset:var(--len,900);animation:draw 1.5s var(--ease) forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .board .fade{opacity:0;animation:fadeUp .9s var(--ease) forwards}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* ---------- 通用段落 ---------- */
+  section{position:relative;z-index:2}
+  .wrap{padding:clamp(84px,12vh,150px) var(--pad)}
+  .kicker{
+    margin:0 0 18px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);
+  }
+  h2{
+    margin:0;font-size:clamp(1.9rem,3.6vw,3.1rem);line-height:1.16;letter-spacing:-.025em;font-weight:650;max-width:22ch;
+  }
+  .sub{margin:20px 0 0;max-width:52ch;color:var(--muted);font-size:15.5px;line-height:1.8}
+
+  [data-reveal]{opacity:0;transform:translateY(26px);transition:opacity .85s var(--ease),transform .85s var(--ease)}
+  [data-reveal].is-in{opacity:1;transform:none}
+
+  /* ---------- 笔锋 ---------- */
+  .ink-stage{margin:56px 0 0}
+  .ink-stroke{width:100%;height:clamp(180px,26vw,320px);display:block;overflow:visible}
+  .ink-stroke .base{fill:none;stroke:rgba(255,255,255,.06);stroke-width:2}
+  .ink-stroke .inkline{
+    fill:none;stroke:#EDF4F8;stroke-linecap:round;
+    stroke-dasharray:1 1; /* 由 JS 用 pathLength=1 控制 */
+    stroke-dashoffset:1;
+  }
+  .ink-notes{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:44px;
+    border-top:1px solid var(--line);
+  }
+  .ink-notes div{padding:26px 26px 0 0}
+  .ink-notes div + div{padding-left:26px;border-left:1px solid var(--line)}
+  .ink-notes h3{margin:0 0 8px;font-size:14px;font-weight:600;letter-spacing:.02em}
+  .ink-notes p{margin:0;font-size:13.5px;line-height:1.7;color:var(--muted)}
+
+  /* ---------- 课堂流程：编号行，不用卡片 ---------- */
+  .rows{margin-top:60px;border-top:1px solid var(--line)}
+  .row{
+    display:grid;grid-template-columns:76px minmax(0,1fr) minmax(0,1.15fr);
+    gap:24px;align-items:start;
+    padding:34px 0;border-bottom:1px solid var(--line);
+  }
+  .row .no{font-size:12px;color:var(--dim);letter-spacing:.1em;padding-top:6px}
+  .row h3{margin:0;font-size:clamp(19px,2vw,25px);font-weight:600;letter-spacing:-.015em}
+  .row p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.75;max-width:46ch}
+  .row:hover .no{color:var(--accent);transition:color .3s}
+
+  /* ---------- 规格 ---------- */
+  .spec-grid{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    column-gap:64px;margin-top:56px;
+  }
+  .spec-grid dl{margin:0}
+  .spec-grid div{
+    display:flex;justify-content:space-between;gap:24px;
+    padding:18px 0;border-bottom:1px solid var(--line);
+    font-size:14px;
+  }
+  .spec-grid dt{color:var(--dim)}
+  .spec-grid dd{margin:0;text-align:right;color:var(--text)}
+
+  /* ---------- 收尾 CTA ---------- */
+  .final{
+    padding:clamp(90px,14vh,170px) var(--pad);
+    border-top:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,213,74,.045), transparent 70%);
+  }
+  .final h2{max-width:24ch}
+  .final .actions{margin-top:36px}
+
+  footer{
+    position:relative;z-index:2;
+    display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;
+    padding:30px var(--pad) 42px;border-top:1px solid var(--line);
+    font-size:12.5px;color:var(--dim);
+  }
+  footer a:hover{color:var(--text)}
+
+  /* ---------- 响应式 ---------- */
+  @media (max-width:1080px){
+    .hero-visual{width:82vw;opacity:.5}
+    .hero-copy{max-width:560px}
+  }
+  @media (max-width:860px){
+    .topnav{display:none}
+    .hero{min-height:auto;padding-top:112px;padding-bottom:36px;display:block}
+    .hero-visual{position:relative;right:auto;top:auto;transform:none;width:100%;margin:48px 0 0;opacity:.9}
+    .ink-notes{grid-template-columns:1fr}
+    .ink-notes div + div{padding-left:0;border-left:0;border-top:1px solid var(--line)}
+    .ink-notes div{padding:22px 0}
+    .row{grid-template-columns:44px minmax(0,1fr);gap:14px 16px}
+    .row p{grid-column:2}
+    .spec-grid{grid-template-columns:1fr;column-gap:0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{animation-duration:.001ms !important;animation-delay:0ms !important;transition-duration:.001ms !important}
+    [data-reveal]{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body id="top">
+<div class="ambient" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="topbar" id="topbar">
+  <a class="brand" href="#top">SETBoard <span>迅教科技</span></a>
+  <nav class="topnav" aria-label="页面导航">
+    <a href="#ink">笔锋</a>
+    <a href="#class">课堂</a>
+    <a href="#spec">规格</a>
+  </nav>
+  <a class="btn btn-sm" href="https://github.com/RejTech/SETBoard">GitHub</a>
+</header>
+
+<main>
+  <!-- 首屏 -->
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow mono">Windows · 触屏教学白板</p>
+      <h1>把黑板<br>装进<em>触摸屏</em></h1>
+      <p class="lede">为电子白板与触控一体机而写：落笔即刻出墨，压感带出笔锋，手指与笔各司其职。没有多余面板，只有一整块可写的板面。</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/releases/latest">下载 Windows 版</a>
+        <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">查看源码</a>
+      </div>
+      <p class="meta mono">Windows 10 / 11 · .NET 9 · Avalonia · 开源免费</p>
+    </div>
+
+    <!-- 板面：全部用矢量绘制，不依赖截图 -->
+    <div class="hero-visual">
+      <svg class="board" viewBox="0 0 1180 760" role="img" aria-label="SETBoard 白板界面的示意：点阵板面、手写公式、高亮笔迹与底部工具栏">
+        <defs>
+          <pattern id="dots" width="34" height="34" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1.5" fill="#3B5765" opacity=".55" />
+          </pattern>
+          <linearGradient id="boardBg" x1="0" y1="0" x2="0.4" y2="1">
+            <stop offset="0" stop-color="#142C39" />
+            <stop offset=".55" stop-color="#0F232E" />
+            <stop offset="1" stop-color="#0B1A23" />
+          </linearGradient>
+          <linearGradient id="glassBar" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#243441" stop-opacity=".96" />
+            <stop offset="1" stop-color="#111B25" stop-opacity=".96" />
+          </linearGradient>
+        </defs>
+
+        <rect x="0" y="0" width="1180" height="760" rx="26" fill="url(#boardBg)" />
+        <rect x="0" y="0" width="1180" height="760" rx="26" fill="url(#dots)" />
+        <rect x="9" y="9" width="1162" height="742" rx="20" fill="none" stroke="#2E4A59" stroke-width="1.4" />
+
+        <!-- 高亮笔（半透明黄），压在文字下方 -->
+        <path d="M150 300 L520 292" stroke="#FFD54A" stroke-width="46" stroke-linecap="round" opacity=".22" />
+
+        <!-- 手写公式 -->
+        <g class="chalk" stroke-width="5.5">
+          <path class="draw" style="--len:520;animation-delay:.15s" pathLength="520" d="M150 300 c 10 -34 26 -50 34 -18 c 7 27 -12 62 6 62 c 15 0 22 -32 32 -30 c 10 2 4 30 16 30" />
+          <path class="draw" style="--len:60;animation-delay:.55s" pathLength="60" d="M256 286 l 22 -1" />
+          <path class="draw" style="--len:520;animation-delay:.62s" pathLength="520" d="M296 282 c -44 4 -58 40 -34 58 c 24 18 66 6 74 -26 c 8 -32 -22 -58 -58 -46" />
+          <path class="draw" style="--len:120;animation-delay:.95s" pathLength="120" d="M392 300 l 0 -34 l 26 0 l -26 34 l 26 0" />
+        </g>
+
+        <!-- 抛物线坐标系 -->
+        <g class="chalk" stroke-width="3.4" opacity=".9">
+          <path class="draw" style="--len:420;animation-delay:1.05s" pathLength="420" d="M640 470 L 860 470" />
+          <path class="draw" style="--len:360;animation-delay:1.15s" pathLength="360" d="M700 520 L 700 330" />
+          <path class="draw" style="--len:640;animation-delay:1.3s" pathLength="640" d="M640 330 c 40 150 120 190 220 140" />
+          <circle cx="700" cy="470" r="4.5" fill="#EDF4F8" stroke="none" />
+        </g>
+
+        <!-- 手写批注：箭头 + 圈注 -->
+        <g class="chalk" stroke-width="4">
+          <path class="draw" style="--len:300;animation-delay:1.5s" pathLength="300" d="M905 372 c 46 -18 82 -14 116 6" />
+          <path class="draw" style="--len:70;animation-delay:1.75s" pathLength="70" d="M996 360 l 26 18 l -26 16" />
+          <path class="draw" style="--len:420;animation-delay:1.85s" pathLength="420" d="M902 424 c 60 -22 116 -8 122 18 c 6 26 -70 34 -112 14" />
+        </g>
+
+        <!-- 侧边荧光标记 -->
+        <path class="draw" style="--len:180;animation-delay:2s" pathLength="180"
+              d="M150 560 c 70 -12 128 -10 190 6" fill="none" stroke="#51CF66" stroke-width="6" stroke-linecap="round" opacity=".75" />
+
+        <!-- 底部工具栏（对应真实界面的胶囊面板） -->
+        <g class="fade" style="animation-delay:.6s">
+          <rect x="300" y="626" width="580" height="86" rx="43" fill="url(#glassBar)" stroke="#3A5566" />
+          <g fill="#DDE8EF" opacity=".92">
+            <rect x="330" y="648" width="42" height="42" rx="12" fill="#FFD54A" />
+            <rect x="390" y="648" width="42" height="42" rx="12" fill="#2C4352" />
+            <rect x="450" y="648" width="42" height="42" rx="12" fill="#2C4352" />
+            <rect x="510" y="648" width="42" height="42" rx="12" fill="#2C4352" />
+            <rect x="570" y="648" width="42" height="42" rx="12" fill="#2C4352" />
+          </g>
+          <circle cx="600" cy="669" r="6" fill="#0F232E" />
+          <rect x="640" y="650" width="180" height="8" rx="4" fill="#2C4352" />
+          <circle cx="760" cy="669" r="9" fill="#FFD54A" />
+          <rect x="838" y="659" width="26" height="20" rx="6" fill="#2C4352" />
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 笔锋 -->
+  <section id="ink">
+    <div class="wrap">
+      <p class="kicker mono" data-reveal>Ink Engine</p>
+      <h2 data-reveal>笔锋不是滤镜，<br>是几何算出来的</h2>
+      <p class="sub" data-reveal>采样点先做压感与笔速映射，再做半径限速和平滑，首尾按 30% 收锋；稀疏的触屏采样用向心 Catmull-Rom 曲线加密，所以一笔下去是连贯的曲线，而不是一节节直线。</p>
+
+      <div class="ink-stage" data-reveal>
+        <svg class="ink-stroke" viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
+          <path class="base" d="M20 200 C 180 60, 300 60, 430 150 S 700 240, 820 120 S 940 90, 980 140" />
+          <path id="strokeDemo" class="inkline" pathLength="1" d="M20 200 C 180 60, 300 60, 430 150 S 700 240, 820 120 S 940 90, 980 140" />
+        </svg>
+      </div>
+
+      <div class="ink-notes">
+        <div data-reveal>
+          <h3>压感 × 笔速</h3>
+          <p>按压力与移动速度共同决定半宽，快写自然变细，慢写更饱满。</p>
+        </div>
+        <div data-reveal>
+          <h3>收锋与限速</h3>
+          <p>相邻半径变化做斜率限制，端头渐变收锋，避免出现枣核或断口。</p>
+        </div>
+        <div data-reveal>
+          <h3>曲线加密</h3>
+          <p>采样点之间补曲线，粗细随笔宽自适应，粗笔稀、细笔密。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 课堂流程 -->
+  <section id="class">
+    <div class="wrap">
+      <p class="kicker mono" data-reveal>In Class</p>
+      <h2 data-reveal>从板书到资料，<br>不用切换软件</h2>
+      <p class="sub" data-reveal>讲课时随手写，讲完直接分页导出；需要讲别的内容，把白板最小化到桌面继续批注。</p>
+
+      <div class="rows">
+        <div class="row" data-reveal>
+          <span class="no mono">01</span>
+          <h3>随手板书</h3>
+          <p>无限画布配合滚轮缩放、中键平移、双指捏合；点阵背景可按需开关。笔尖落下时自动屏蔽手掌与手指，手掌压在板上也不会误画。</p>
+        </div>
+        <div class="row" data-reveal>
+          <span class="no mono">02</span>
+          <h3>桌面批注</h3>
+          <p>最小化后保留一条浮动工具条，点开即进入全屏透明批注层，可以直接在课件、录屏、系统界面上圈画。</p>
+        </div>
+        <div class="row" data-reveal>
+          <span class="no mono">03</span>
+          <h3>分页与导出</h3>
+          <p>一节课多页白板，支持撤销重做；整页导出 PNG，或存成 .setb 文件下次继续。图片可直接插入画布移动缩放。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 规格 -->
+  <section id="spec">
+    <div class="wrap">
+      <p class="kicker mono" data-reveal>Specification</p>
+      <h2 data-reveal>轻，但不简陋</h2>
+
+      <div class="spec-grid">
+        <dl data-reveal>
+          <div><dt>系统</dt><dd>Windows 10 / 11</dd></div>
+          <div><dt>框架</dt><dd>Avalonia 11 · .NET 9</dd></div>
+          <div><dt>输入</dt><dd>触控笔 / 手指 / 鼠标</dd></div>
+          <div><dt>输入通道</dt><dd>Win32 WM_POINTER · WM_TOUCH 直读</dd></div>
+        </dl>
+        <dl data-reveal>
+          <div><dt>工具</dt><dd>书写 · 荧光笔 · 橡皮 · 选择 · 形状 · 图片</dd></div>
+          <div><dt>颜色</dt><dd>6 色快捷板，1–16 级粗细</dd></div>
+          <div><dt>文件</dt><dd>.setb 存档 · PNG 导出</dd></div>
+          <div><dt>发布</dt><dd>单文件绿色版，解压即用</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- 收尾 -->
+  <section class="final">
+    <p class="kicker mono" data-reveal>Download</p>
+    <h2 data-reveal>下一节课，<br>换一块好写的板子</h2>
+    <div class="actions" data-reveal>
+      <a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/releases/latest">下载 Windows 版</a>
+      <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">GitHub 仓库</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>© <span class="mono">2026</span> Swift Education Technology · 迅教科技</span>
+  <span class="mono">SETBoard · 教学白板</span>
+</footer>
+
+<script>
+(function () {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // 段落进入视口时上浮显示
+  const targets = document.querySelectorAll("[data-reveal]");
+  if (!reduce && "IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-in");
+        io.unobserve(entry.target);
+      });
+    }, { rootMargin: "0px 0px -12% 0px", threshold: 0.15 });
+    targets.forEach((el) => io.observe(el));
+  } else {
+    targets.forEach((el) => el.classList.add("is-in"));
+  }
+
+  // 顶栏滚动后加毛玻璃底色
+  const bar = document.getElementById("topbar");
+  const onScroll = () => bar.classList.toggle("is-stuck", window.scrollY > 24);
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+
+  // 笔锋演示：随滚动进度描绘
+  const stroke = document.getElementById("strokeDemo");
+  if (stroke && !reduce) {
+    const stage = stroke.closest(".ink-stage");
+    const update = () => {
+      const rect = stage.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      const progress = Math.min(1, Math.max(0, (vh * 0.85 - rect.top) / (vh * 0.55)));
+      stroke.style.strokeDashoffset = String(1 - progress);
+      stroke.style.strokeWidth = String(2 + progress * 16);
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+  } else if (stroke) {
+    stroke.style.strokeDashoffset = "0";
+    stroke.style.strokeWidth = "18";
+  }
+})();
+</script>
+</body>
+</html>
