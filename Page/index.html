@@ -214,6 +214,11 @@
   .spec-grid dt{color:var(--dim)}
   .spec-grid dd{margin:0;text-align:right;color:var(--text)}
 
+  /* ---------- 开源许可 ---------- */
+  .license-copy{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(240px,.65fr);gap:64px;align-items:end}
+  .license-copy .sub{max-width:58ch}
+  .license-links{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end}
+
   /* ---------- 收尾 CTA ---------- */
   .final{
     padding:clamp(90px,14vh,170px) var(--pad);
@@ -246,6 +251,8 @@
     .row{grid-template-columns:44px minmax(0,1fr);gap:14px 16px}
     .row p{grid-column:2}
     .spec-grid{grid-template-columns:1fr;column-gap:0}
+    .license-copy{grid-template-columns:1fr;gap:32px}
+    .license-links{justify-content:flex-start}
   }
   @media (prefers-reduced-motion:reduce){
     html{scroll-behavior:auto}
@@ -265,6 +272,7 @@
     <a href="#ink">笔锋</a>
     <a href="#class">课堂</a>
     <a href="#spec">规格</a>
+    <a href="#license">许可</a>
   </nav>
   <a class="btn btn-sm" href="https://github.com/RejTech/SETBoard">GitHub</a>
 </header>
@@ -287,7 +295,7 @@
           重播动画
         </button>
       </div>
-      <p class="meta mono">Windows 10 / 11 · .NET 9 · Avalonia · 开源免费</p>
+      <p class="meta mono">Windows 10 / 11 · .NET 9 · Avalonia · GPL-3.0</p>
     </div>
 
     <!-- 板面：全部用矢量绘制，不依赖截图 -->
@@ -442,6 +450,21 @@
     </div>
   </section>
 
+  <!-- 开源许可 -->
+  <section id="license">
+    <div class="wrap license-copy">
+      <div>
+        <p class="kicker mono" data-reveal>Open Source</p>
+        <h2 data-reveal>开放代码，<br>保留创造的自由</h2>
+        <p class="sub" data-reveal>SETBoard 仅依据 GPL-3.0 开源。你可以使用、研究、修改与分发；分发本项目或修改版本时，需要继续提供对应源码并保留版权与许可声明。许可证文件同时提供英文原文与简体中文参考译文。</p>
+      </div>
+      <div class="license-links" data-reveal>
+        <a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/blob/main/LICENSE">查看 GPLv3 中英文本</a>
+        <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">浏览源码</a>
+      </div>
+    </div>
+  </section>
+
   <!-- 收尾 -->
   <section class="final">
     <p class="kicker mono" data-reveal>Download</p>
@@ -455,7 +478,7 @@
 
 <footer>
   <span>© <span class="mono">2026</span> Swift Education Technology · 迅教科技</span>
-  <span class="mono">SETBoard · 教学白板</span>
+  <span><a href="https://github.com/RejTech/SETBoard/blob/main/LICENSE">GPL-3.0-only</a> · <span class="mono">SETBoard · 教学白板</span></span>
 </footer>
 
 <script>

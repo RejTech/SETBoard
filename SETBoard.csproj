@@ -8,6 +8,11 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>SETBoard</AssemblyName>
     <RootNamespace>SETBoard</RootNamespace>
+    <Authors>Swift Education Technology</Authors>
+    <Company>Swift Education Technology</Company>
+    <Copyright>Copyright © 2026 Swift Education Technology</Copyright>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/RejTech/SETBoard</RepositoryUrl>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>

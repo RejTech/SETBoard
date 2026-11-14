@@ -165,9 +165,9 @@ internal sealed class DesktopAnnotationWindow : Window
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(22),
             Padding = new Thickness(5),
-            Margin = new Thickness(0, 18, 0, 0),
+            Margin = new Thickness(0, 0, 0, 18),
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
+            VerticalAlignment = VerticalAlignment.Bottom,
             BoxShadow = BoxShadows.Parse("0 8 22 0 #59000000"),
             Child = new ScrollViewer
             {
