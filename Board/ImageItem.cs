@@ -18,25 +18,25 @@ public sealed class ImageItem : BoardItem
     public double X
     {
         get => _x;
-        set { _x = value; Invalidate(); }
+        set { _x = value; }
     }
 
     public double Y
     {
         get => _y;
-        set { _y = value; Invalidate(); }
+        set { _y = value; }
     }
 
     public double Width
     {
         get => _width;
-        set { _width = value; Invalidate(); }
+        set { _width = value; }
     }
 
     public double Height
     {
         get => _height;
-        set { _height = value; Invalidate(); }
+        set { _height = value; }
     }
 
     /// <summary>图片文件的原始字节（JSON 中以 base64 保存）。</summary>

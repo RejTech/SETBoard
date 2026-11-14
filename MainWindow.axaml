@@ -55,7 +55,7 @@
 
     <!-- 工具按钮：图标 + 文字 -->
     <Style Selector="Button.tool">
-      <Setter Property="Width" Value="68" />
+      <Setter Property="Width" Value="60" />
       <Setter Property="Height" Value="58" />
       <Setter Property="Padding" Value="0,7,0,5" />
       <Setter Property="Background" Value="Transparent" />
@@ -88,6 +88,18 @@
     </Style>
     <Style Selector="Button.tool:disabled">
       <Setter Property="Opacity" Value="0.32" />
+    </Style>
+
+    <Style Selector="Button.tool > ContentPresenter">
+      <Setter Property="RenderTransform" Value="scale(1)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.11" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.tool:pressed > ContentPresenter">
+      <Setter Property="RenderTransform" Value="scale(0.94)" />
     </Style>
 
     <!-- Fluent 图标字体 -->
@@ -192,9 +204,20 @@
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="Margin" Value="2,0" />
       <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="RenderTransform" Value="scale(1)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.swatch:pointerover">
+      <Setter Property="RenderTransform" Value="scale(1.12)" />
     </Style>
     <Style Selector="Button.swatch.active">
       <Setter Property="BorderBrush" Value="#FFFFFF" />
+      <Setter Property="RenderTransform" Value="scale(1.12)" />
     </Style>
 
     <!-- 笔迹粗细滑块 -->
@@ -215,6 +238,11 @@
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="14" />
       <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.13" />
+        </Transitions>
+      </Setter>
     </Style>
     <Style Selector="Button.shape:pointerover">
       <Setter Property="Background" Value="#2A3842" />
@@ -244,6 +272,23 @@
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="9" />
       <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.13" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.insertChoice">
+      <Setter Property="Width" Value="110" />
+      <Setter Property="Height" Value="96" />
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="Background" Value="#243440" />
+      <Setter Property="Foreground" Value="#E8EFF4" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.insertChoice:pointerover">
+      <Setter Property="Background" Value="#344C5D" />
     </Style>
     <Style Selector="Button.zoom:pointerover">
       <Setter Property="Background" Value="#2A3842" />
@@ -262,23 +307,23 @@
       <Setter Property="FontSize" Value="13" />
       <Setter Property="Padding" Value="14,8" />
       <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="MinWidth" Value="260" />
     </Style>
     <Style Selector="MenuItem:pointerover">
       <Setter Property="Background" Value="#2C3A45" />
       <Setter Property="Foreground" Value="#FFFFFF" />
     </Style>
-    <Style Selector="ToolTip">
-      <Setter Property="Background" Value="#1E2A33" />
-      <Setter Property="BorderBrush" Value="#33424D" />
-      <Setter Property="Foreground" Value="#D5DFE6" />
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="10,6" />
-    </Style>
   </Window.Styles>
 
   <Panel x:Name="RootPanel">
-    <board:BoardCanvas x:Name="Board" />
+    <board:BoardCanvas x:Name="Board" Opacity="0">
+      <board:BoardCanvas.Transitions>
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.15" Easing="CubicEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.17" Easing="CubicEaseOut" />
+        </Transitions>
+      </board:BoardCanvas.Transitions>
+    </board:BoardCanvas>
 
     <!-- 右上角缩放 -->
     <Border HorizontalAlignment="Right"
@@ -288,7 +333,7 @@
             BorderBrush="#2B3A45"
             BorderThickness="1"
             CornerRadius="10">
-      <Button x:Name="ZoomButton" Classes="zoom" Click="OnZoomResetClick" ToolTip.Tip="点击恢复 100%">
+      <Button x:Name="ZoomButton" Classes="zoom" Click="OnZoomResetClick">
         <TextBlock x:Name="ZoomText" Text="100%" Foreground="#9FB4C1" FontSize="12" />
       </Button>
     </Border>
@@ -299,36 +344,38 @@
       <ContentControl Grid.Column="0" Classes="panel" CornerRadius="35"
                       HorizontalAlignment="Left" VerticalAlignment="Bottom">
         <StackPanel Orientation="Horizontal">
-          <Button Classes="tool" Click="OnExitClick" ToolTip.Tip="退出">
+          <Button Classes="tool" Click="OnExitClick">
             <StackPanel>
               <TextBlock Classes="icon" Text="&#xE7E8;" />
               <TextBlock Classes="label" Text="退出" />
             </StackPanel>
           </Button>
 
-          <Button Classes="tool" Click="OnMinimizeClick" ToolTip.Tip="最小化到桌面浮窗">
+          <Button Classes="tool" Click="OnMinimizeClick">
             <StackPanel>
               <TextBlock Classes="icon" Text="&#xE921;" />
               <TextBlock Classes="label" Text="最小化" />
             </StackPanel>
           </Button>
 
-          <Button x:Name="MenuButton" Classes="tool" ToolTip.Tip="菜单">
+          <Button x:Name="MenuButton" Classes="tool">
             <StackPanel>
               <TextBlock Classes="icon" Text="&#xE700;" />
-              <TextBlock Classes="label" Text="菜单" />
+              <TextBlock Classes="label" Text="更多" />
             </StackPanel>
             <Button.Flyout>
               <MenuFlyout Placement="TopEdgeAlignedLeft">
-                <MenuItem Header="打开白板…" Click="OnOpenClick" />
-                <MenuItem Header="保存白板…" Click="OnSaveClick" />
-                <MenuItem Header="导出 PNG 图片…" Click="OnExportClick" />
-                <MenuItem Header="适应内容" Click="OnFitClick" />
-                <MenuItem Header="重置视图" Click="OnZoomResetClick" />
-                <MenuItem x:Name="GridMenuItem" Header="点阵：开" Click="OnGridMenuClick" />
-                <MenuItem Header="清空本页" Click="OnClearClick" />
-                <MenuItem x:Name="DeletePageMenuItem" Header="删除本页" Click="OnDeletePageClick" />
+                <MenuItem Header="打开白板… (Ctrl+O)" Click="OnOpenClick" />
+                <MenuItem Header="保存白板… (Ctrl+S)" Click="OnSaveClick" />
+                <MenuItem Header="导出当前页为 PNG…" Click="OnExportClick" />
+                <Separator />
+                <MenuItem Header="适应内容 (Ctrl+1)" Click="OnFitClick" />
+                <MenuItem Header="重置视图 (Ctrl+0)" Click="OnZoomResetClick" />
+                <MenuItem x:Name="GridMenuItem" Header="显示点阵" ToggleType="CheckBox" Click="OnGridMenuClick" />
                 <MenuItem Header="全屏 (F11)" Click="OnFullScreenClick" />
+                <Separator />
+                <MenuItem x:Name="DeletePageMenuItem" Header="删除本页…" Click="OnDeletePageClick" />
+                <Separator />
                 <MenuItem Header="关于 SETBoard" Click="OnAboutClick" />
               </MenuFlyout>
             </Button.Flyout>
@@ -338,63 +385,71 @@
 
       <!-- 中：工具 + 撤销恢复 / 墨水选项 -->
       <StackPanel x:Name="ToolDock" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Bottom" Spacing="8">
-        <ContentControl x:Name="InkOptions" Classes="panel" CornerRadius="20" HorizontalAlignment="Center">
+        <ContentControl x:Name="InkOptions" Classes="panel" CornerRadius="20" HorizontalAlignment="Center" IsVisible="False">
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="1" Margin="4,0">
             <StackPanel x:Name="ShapePicker" Orientation="Horizontal" Spacing="1" IsVisible="False">
-              <Button Classes="shape" Tag="Line" Click="OnShapeClick" ToolTip.Tip="直线">
+              <Button Classes="shape" Tag="Line" Click="OnShapeClick">
                 <Path Classes="smallicon" Data="M5 19L19 5" />
               </Button>
-              <Button Classes="shape" Tag="Arrow" Click="OnShapeClick" ToolTip.Tip="箭头">
+              <Button Classes="shape" Tag="Arrow" Click="OnShapeClick">
                 <Path Classes="smallicon" Data="M5 19L19 5 M13.5 5H19v5.5" />
               </Button>
-              <Button Classes="shape" Tag="Rectangle" Click="OnShapeClick" ToolTip.Tip="矩形">
+              <Button Classes="shape" Tag="Rectangle" Click="OnShapeClick">
                 <Path Classes="smallicon" Data="M4.5 6.5h15v11h-15z" />
               </Button>
-              <Button Classes="shape" Tag="Ellipse" Click="OnShapeClick" ToolTip.Tip="圆形">
+              <Button Classes="shape" Tag="Ellipse" Click="OnShapeClick">
                 <Path Classes="smallicon" Data="M12 4.5a7.5 7.5 0 1 0 0 15a7.5 7.5 0 1 0 0-15" />
               </Button>
-              <Button Classes="shape" Tag="Triangle" Click="OnShapeClick" ToolTip.Tip="三角形">
+              <Button Classes="shape" Tag="Triangle" Click="OnShapeClick">
                 <Path Classes="smallicon" Data="M12 4.5L20 19.5H4z" />
-              </Button>
-              <Button x:Name="FunctionButton" Classes="shape" Click="OnFunctionClick" ToolTip.Tip="函数图像">
-                <TextBlock Text="ƒ" FontFamily="Cambria Math, Times New Roman" FontSize="17"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-              </Button>
-              <Button x:Name="SolidButton" Classes="shape" ToolTip.Tip="三维几何体（选中后拖动旋转）">
-                <Path Classes="smallicon" Data="M12 2.8L19.2 6.9V17.1L12 21.2L4.8 17.1Z" />
-                <Button.Flyout>
-                  <MenuFlyout Placement="Top">
-                    <MenuItem Header="正方体" Tag="Cube" Click="OnSolidClick" />
-                    <MenuItem Header="长方体" Tag="Cuboid" Click="OnSolidClick" />
-                    <MenuItem Header="四棱锥" Tag="Pyramid" Click="OnSolidClick" />
-                    <MenuItem Header="圆柱" Tag="Cylinder" Click="OnSolidClick" />
-                    <MenuItem Header="圆锥" Tag="Cone" Click="OnSolidClick" />
-                    <MenuItem Header="球" Tag="Sphere" Click="OnSolidClick" />
-                  </MenuFlyout>
-                </Button.Flyout>
               </Button>
               <Border Classes="divider" />
             </StackPanel>
 
-            <Button x:Name="WhiteSwatch" Classes="swatch active" Background="#FFFFFF" Tag="FFFFFFFF" Click="OnColorClick" ToolTip.Tip="白色" />
-            <Button x:Name="YellowSwatch" Classes="swatch" Background="#FFD54A" Tag="FFFFD54A" Click="OnColorClick" ToolTip.Tip="黄色" />
-            <Button x:Name="RedSwatch" Classes="swatch" Background="#FF6B6B" Tag="FFFF6B6B" Click="OnColorClick" ToolTip.Tip="红色" />
-            <Button x:Name="GreenSwatch" Classes="swatch" Background="#51CF66" Tag="FF51CF66" Click="OnColorClick" ToolTip.Tip="绿色" />
-            <Button x:Name="BlueSwatch" Classes="swatch" Background="#4DABF7" Tag="FF4DABF7" Click="OnColorClick" ToolTip.Tip="蓝色" />
-            <Button x:Name="GraySwatch" Classes="swatch" Background="#ADB5BD" Tag="FFADB5BD" Click="OnColorClick" ToolTip.Tip="灰色" />
+            <StackPanel x:Name="SolidPicker" Orientation="Horizontal" Spacing="1" IsVisible="False">
+              <Button Classes="shape" Tag="Cube" Click="OnSolidClick">
+                <Path Classes="smallicon" Data="M7 7H19V19H7Z M7 7L3.5 3.5H15.5L19 7 M15.5 3.5V15.5L19 19 M3.5 3.5V15.5L7 19" />
+              </Button>
+              <Button Classes="shape" Tag="Cuboid" Click="OnSolidClick">
+                <Path Classes="smallicon" Data="M6 8H20V17H6Z M6 8L3 5H17L20 8 M17 5V14L20 17 M3 5V14L6 17" />
+              </Button>
+              <Button Classes="shape" Tag="Pyramid" Click="OnSolidClick">
+                <Path Classes="smallicon" Data="M4 16L15 13L20 16L10 20Z M12 3L4 16 M12 3L15 13 M12 3L20 16 M12 3L10 20" />
+              </Button>
+              <Button Classes="shape" Tag="Cylinder" Click="OnSolidClick">
+                <Path Classes="smallicon" Data="M5 7C5 3.5 19 3.5 19 7C19 10.5 5 10.5 5 7Z M5 7V17C5 20.5 19 20.5 19 17V7 M5 17C5 13.5 19 13.5 19 17" />
+              </Button>
+              <Button Classes="shape" Tag="Cone" Click="OnSolidClick">
+                <Path Classes="smallicon" Data="M12 3L5 18C5 21.5 19 21.5 19 18Z M5 18C5 14.5 19 14.5 19 18" />
+              </Button>
+              <Button Classes="shape" Tag="Sphere" Click="OnSolidClick">
+                <Path Classes="smallicon" Data="M12 3A9 9 0 1 0 12 21A9 9 0 1 0 12 3 M3 12C6 9 18 9 21 12C18 15 6 15 3 12 M12 3C8 6 8 18 12 21C16 18 16 6 12 3" />
+              </Button>
+              <Border Classes="divider" />
+            </StackPanel>
+
+            <Button x:Name="WhiteSwatch" Classes="swatch active" Background="#FFFFFF" Tag="FFFFFFFF" Click="OnColorClick" />
+            <Button x:Name="YellowSwatch" Classes="swatch" Background="#FFD54A" Tag="FFFFD54A" Click="OnColorClick" />
+            <Button x:Name="RedSwatch" Classes="swatch" Background="#FF6B6B" Tag="FFFF6B6B" Click="OnColorClick" />
+            <Button x:Name="GreenSwatch" Classes="swatch" Background="#51CF66" Tag="FF51CF66" Click="OnColorClick" />
+            <Button x:Name="BlueSwatch" Classes="swatch" Background="#4DABF7" Tag="FF4DABF7" Click="OnColorClick" />
+            <Button x:Name="GraySwatch" Classes="swatch" Background="#ADB5BD" Tag="FFADB5BD" Click="OnColorClick" />
+            <Button x:Name="OrangeSwatch" Classes="swatch" Background="#FF922B" Tag="FFFF922B" Click="OnColorClick" />
+            <Button x:Name="PurpleSwatch" Classes="swatch" Background="#B197FC" Tag="FFB197FC" Click="OnColorClick" />
+            <Button x:Name="CyanSwatch" Classes="swatch" Background="#3BC9DB" Tag="FF3BC9DB" Click="OnColorClick" />
+            <Button x:Name="BlackSwatch" Classes="swatch" Background="#20252B" Tag="FF20252B" Click="OnColorClick" />
+            <Button x:Name="CustomSwatch" Classes="swatch" Background="#FF80AB" Tag="FFFF80AB" Click="OnCustomColorClick" Content="+" Foreground="White" />
 
             <Border Classes="divider" />
 
             <Slider x:Name="InkWidthSlider" Classes="inksize"
                     Minimum="1" Maximum="16" Value="4"
-                    ToolTip.Tip="笔迹粗细"
                     ValueChanged="OnInkWidthChanged" />
 
             <!-- 粗细预览：线宽和颜色跟随当前笔 -->
             <Border Width="66" Height="34" CornerRadius="10"
                     Background="#1B2833" BorderBrush="#2EFFFFFF" BorderThickness="1"
-                    Margin="0,0,10,0" VerticalAlignment="Center"
-                    ToolTip.Tip="当前粗细预览">
+                    Margin="0,0,10,0" VerticalAlignment="Center">
               <Border x:Name="InkPreview" Width="46" Height="4" CornerRadius="2"
                       Background="#FFFFFF"
                       HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -402,67 +457,109 @@
           </StackPanel>
         </ContentControl>
 
+        <ContentControl x:Name="EraserOptions" Classes="panel" CornerRadius="20" HorizontalAlignment="Center" IsVisible="False">
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="14,4">
+            <TextBlock Text="滑动清空本页" Foreground="#E8EFF4" VerticalAlignment="Center" FontSize="13" />
+            <Slider x:Name="ClearPageSlider" Minimum="0" Maximum="100" Value="0" Width="210" />
+            <TextBlock Text="→" Foreground="#FFB900" VerticalAlignment="Center" FontSize="19" />
+          </StackPanel>
+        </ContentControl>
+
         <ContentControl Classes="panel" CornerRadius="35" HorizontalAlignment="Center">
           <StackPanel Orientation="Horizontal">
-            <Button x:Name="PenButton" Classes="tool active" Tag="Pen" Click="OnToolClick" ToolTip.Tip="书写 (P)">
+            <Button x:Name="PanButton" Classes="tool" Tag="Pan" Click="OnToolClick">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE8AB;" />
+                <TextBlock Classes="label" Text="移动" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="PenButton" Classes="tool active" Tag="Pen" Click="OnToolClick">
               <StackPanel>
                 <TextBlock Classes="icon" Text="&#xE70F;" />
                 <TextBlock Classes="label" Text="书写" />
               </StackPanel>
             </Button>
 
-            <Button x:Name="HighlighterButton" Classes="tool" Tag="Highlighter" Click="OnToolClick" ToolTip.Tip="荧光笔 (H)">
+            <Button x:Name="HighlighterButton" Classes="tool" Tag="Highlighter" Click="OnToolClick">
               <StackPanel>
                 <TextBlock Classes="icon" Text="&#xE7E6;" />
                 <TextBlock Classes="label" Text="荧光" />
               </StackPanel>
             </Button>
 
-            <Button x:Name="EraserButton" Classes="tool" Tag="Eraser" Click="OnToolClick" ToolTip.Tip="橡皮 (E)">
+            <Button x:Name="EraserButton" Classes="tool" Tag="Eraser" Click="OnToolClick">
               <StackPanel>
                 <TextBlock Classes="icon" Text="&#xE75C;" />
                 <TextBlock Classes="label" Text="擦除" />
               </StackPanel>
             </Button>
 
-            <Button x:Name="SelectButton" Classes="tool" Tag="Select" Click="OnToolClick" ToolTip.Tip="选择 (V)">
+            <Button x:Name="SelectButton" Classes="tool" Tag="Select" Click="OnToolClick">
               <StackPanel>
                 <TextBlock Classes="icon" Text="&#xE8B3;" />
                 <TextBlock Classes="label" Text="选择" />
               </StackPanel>
             </Button>
 
-            <Button x:Name="FillButton" Classes="tool" Tag="Fill" Click="OnToolClick" ToolTip.Tip="填色（三维几何体的面，或手绘笔画围出的闭合区域）">
+            <Button x:Name="InsertButton" Classes="tool">
+              <StackPanel>
+                <TextBlock Classes="icon" Text="&#xE710;" />
+                <TextBlock Classes="label" Text="插入" />
+              </StackPanel>
+              <Button.Flyout>
+                <Flyout Placement="Top">
+                  <Border Background="#1E2A33" BorderBrush="#33424D" BorderThickness="1" CornerRadius="18" Padding="14">
+                    <StackPanel Spacing="12">
+                      <TextBlock Text="插入内容" FontSize="14" Foreground="#A6BCCB" Margin="4,0" />
+                      <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+                        <Button Grid.Row="0" Grid.Column="0" Classes="insertChoice" Click="OnShapeButtonClick">
+                          <StackPanel Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="▢" FontSize="34" HorizontalAlignment="Center" />
+                            <TextBlock Text="形状" FontSize="14" HorizontalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                        <Button Grid.Row="0" Grid.Column="1" Classes="insertChoice" Click="OnSolidButtonClick">
+                          <StackPanel Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="⬡" FontSize="34" HorizontalAlignment="Center" />
+                            <TextBlock Text="三维几何体" FontSize="14" HorizontalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="0" Classes="insertChoice" Click="OnFunctionClick">
+                          <StackPanel Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="ƒ" FontSize="34" HorizontalAlignment="Center" />
+                            <TextBlock Text="函数图像" FontSize="14" HorizontalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="1" Classes="insertChoice" Click="OnInsertImageClick">
+                          <StackPanel Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="▧" FontSize="34" HorizontalAlignment="Center" />
+                            <TextBlock Text="图片" FontSize="14" HorizontalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+
+            <Button x:Name="FillButton" Classes="tool" Tag="Fill" Click="OnToolClick">
               <StackPanel>
                 <Path Classes="icon" Data="M9.2 3.4l7.4 7.4-5.6 5.6a2.2 2.2 0 0 1-3.1 0l-4.3-4.3a2.2 2.2 0 0 1 0-3.1z M13 5.3L7.4 10.9 M19.3 14.1c1.1 1.5 1.9 2.7 1.9 3.6a1.9 1.9 0 0 1-3.8 0c0-.9.8-2.1 1.9-3.6z" />
                 <TextBlock Classes="label" Text="填色" />
               </StackPanel>
             </Button>
 
-            <Button x:Name="ShapeButton" Classes="tool" Click="OnShapeButtonClick" ToolTip.Tip="形状">
-              <StackPanel>
-                <Path Classes="icon" Data="M3.5 19.5L9 8l5.5 11.5z M14.5 13.5h6v6h-6z" />
-                <TextBlock Classes="label" Text="形状" />
-              </StackPanel>
-            </Button>
-
-            <Button x:Name="ImageButton" Classes="tool" Click="OnInsertImageClick" ToolTip.Tip="插入图片">
-              <StackPanel>
-                <TextBlock Classes="icon" Text="&#xE8B9;" />
-                <TextBlock Classes="label" Text="图片" />
-              </StackPanel>
-            </Button>
-
             <Border Classes="divider" />
 
-            <Button x:Name="UndoButton" Classes="tool" Click="OnUndoClick" ToolTip.Tip="撤销 (Ctrl+Z)">
+            <Button x:Name="UndoButton" Classes="tool" Click="OnUndoClick">
               <StackPanel>
                 <TextBlock Classes="icon" Text="&#xE7A7;" />
                 <TextBlock Classes="label" Text="撤销" />
               </StackPanel>
             </Button>
 
-            <Button x:Name="RedoButton" Classes="tool" Click="OnRedoClick" ToolTip.Tip="恢复 (Ctrl+Y)">
+            <Button x:Name="RedoButton" Classes="tool" Click="OnRedoClick">
               <StackPanel>
                 <TextBlock Classes="icon" Text="&#xE7A6;" />
                 <TextBlock Classes="label" Text="恢复" />
@@ -476,7 +573,7 @@
       <ContentControl Grid.Column="2" Classes="panel" CornerRadius="29"
                       HorizontalAlignment="Right" VerticalAlignment="Bottom">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <Button x:Name="PrevPageButton" Classes="pager" Click="OnPrevPageClick" ToolTip.Tip="上一页">
+          <Button x:Name="PrevPageButton" Classes="pager" Click="OnPrevPageClick">
             <TextBlock Classes="chevron" Text="&#xE76B;" />
           </Button>
           <TextBlock x:Name="PageText"
@@ -486,11 +583,11 @@
                      VerticalAlignment="Center"
                      Foreground="#D5DFE6"
                      FontSize="13" />
-          <Button x:Name="NextPageButton" Classes="pager" Click="OnNextPageClick" ToolTip.Tip="下一页">
+          <Button x:Name="NextPageButton" Classes="pager" Click="OnNextPageClick">
             <TextBlock Classes="chevron" Text="&#xE76C;" />
           </Button>
           <Border Classes="divider" />
-          <Button x:Name="AddPageButton" Classes="pager" Click="OnAddPageClick" ToolTip.Tip="新建页面">
+          <Button x:Name="AddPageButton" Classes="pager" Click="OnAddPageClick">
             <TextBlock Classes="chevron" Text="&#xE710;" />
           </Button>
         </StackPanel>

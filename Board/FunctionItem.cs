@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Media;
@@ -110,7 +111,11 @@ public sealed class FunctionItem : BoardItem
     public double Width
     {
         get => _width;
-        set { _width = Math.Clamp(value, 0.5, 40); Invalidate(); }
+        set
+        {
+            _width = Math.Clamp(value, 0.5, 40);
+            _axisPen = null;
+        }
     }
 
     [JsonIgnore] public Rect PlotArea => new(_left, _top, _plotWidth, _plotHeight);
@@ -222,13 +227,14 @@ public sealed class FunctionItem : BoardItem
         DrawIntersections(context);
     }
 
-    /// <summary>画出曲线之间的交点：实心圆点 + 一圈淡淡的光晕。</summary>
+    /// <summary>画出曲线之间的交点及其数学坐标。</summary>
     private void DrawIntersections(DrawingContext context)
     {
         var points = GetIntersections();
         if (points.Count == 0) return;
 
-        double radius = Math.Clamp(_width * 1.4, 4, 7);
+        double radius = Math.Clamp(_width * 1.4, 3, 18);
+        double fontSize = Math.Clamp(_width * 3.8, 10, 28);
         var fill = new SolidColorBrush(Avalonia.Media.Color.FromArgb(
             (byte)(_color >> 24), (byte)(_color >> 16), (byte)(_color >> 8), (byte)_color)).ToImmutable();
         var halo = new Pen(new SolidColorBrush(Avalonia.Media.Color.FromArgb(
@@ -239,7 +245,22 @@ public sealed class FunctionItem : BoardItem
             var center = new Point(MapX(point.X), MapY(point.Y));
             context.DrawEllipse(fill, null, center, radius, radius);
             context.DrawEllipse(null, halo, center, radius + 1.8, radius + 1.8);
+
+            string label = $"({FormatCoordinate(point.X)}, {FormatCoordinate(point.Y)})";
+            var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                new Typeface("Cascadia Mono, Consolas, Microsoft YaHei UI"), fontSize, fill);
+            double labelX = center.X + radius + 4;
+            double labelY = center.Y - text.Height - radius - 2;
+            labelX = Math.Clamp(labelX, _left + 3, Math.Max(_left + 3, _left + _plotWidth - text.Width - 3));
+            labelY = Math.Clamp(labelY, _top + 3, Math.Max(_top + 3, _top + _plotHeight - text.Height - 3));
+            context.DrawText(text, new Point(labelX, labelY));
         }
+    }
+
+    private static string FormatCoordinate(double value)
+    {
+        if (Math.Abs(value) < 5e-10) value = 0;
+        return value.ToString("0.###", CultureInfo.InvariantCulture);
     }
 
     /// <summary>

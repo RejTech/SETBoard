@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SETBoard — 把黑板装进触摸屏</title>
-<meta name="description" content="SETBoard 是为电子白板与触控一体机开发的轻量教学白板：压感笔锋、桌面批注、分页导出，落笔就跟手。" />
+<meta name="description" content="SETBoard 是为电子白板与触控一体机开发的轻量教学白板：压感笔锋、桌面批注、函数图像、三维几何与分页导出，落笔就跟手。" />
 <meta name="theme-color" content="#0A171F" />
 <style>
   :root{
@@ -137,7 +137,7 @@
   /* 板面 */
   .hero-visual{
     position:absolute;z-index:1;
-    right:calc(var(--pad) * -.5);
+    right:0;
     top:50%;transform:translateY(-50%);
     width:min(66vw,1040px);
     pointer-events:none;
@@ -146,14 +146,23 @@
   .board .chalk{
     fill:none;stroke:#EDF4F8;stroke-linecap:round;stroke-linejoin:round;
   }
-  .board .draw{stroke-dasharray:var(--len,900);stroke-dashoffset:var(--len,900);animation:draw 1.5s var(--ease) forwards}
+  .board .draw{stroke-dasharray:var(--len,900);stroke-dashoffset:var(--len,900);animation:draw 2.2s var(--ease) forwards}
   @keyframes draw{to{stroke-dashoffset:0}}
-  .board .fade{opacity:0;animation:fadeUp .9s var(--ease) forwards}
+  .board .fade{opacity:0;animation:fadeUp 1.2s var(--ease) forwards}
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .board .pop{opacity:0;transform-box:fill-box;transform-origin:center;animation:popIn .9s var(--ease) forwards}
+  @keyframes popIn{from{opacity:0;transform:scale(.82) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  .board .fill-in{opacity:0;animation:fillIn 1.2s var(--ease) forwards}
+  @keyframes fillIn{from{opacity:0}to{opacity:var(--fill-opacity,.72)}}
+  .board .point{opacity:0;transform-box:fill-box;transform-origin:center;animation:pointIn .72s var(--ease) forwards}
+  @keyframes pointIn{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
 
   /* 重播：去掉 .playing 时把首屏所有入场动画复位，加回来即重新播放 */
   .hero:not(.playing) .board .draw{animation:none;stroke-dashoffset:var(--len,900)}
   .hero:not(.playing) .board .fade{animation:none;opacity:0}
+  .hero:not(.playing) .board .pop{animation:none;opacity:0;transform:scale(.82) translateY(8px)}
+  .hero:not(.playing) .board .fill-in{animation:none;opacity:0}
+  .hero:not(.playing) .board .point{animation:none;opacity:0;transform:scale(0)}
   .hero:not(.playing) h1 em::after{animation:none;transform:scaleX(0)}
 
   /* ---------- 通用段落 ---------- */
@@ -199,6 +208,29 @@
   .row h3{margin:0;font-size:clamp(19px,2vw,25px);font-weight:600;letter-spacing:-.015em}
   .row p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.75;max-width:46ch}
   .row:hover .no{color:var(--accent);transition:color .3s}
+
+  .gallery-head{display:flex;justify-content:space-between;gap:36px;align-items:end}
+  .gallery-head .sub{margin-bottom:4px}
+  .shot-grid{
+    display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);
+    gap:18px;margin-top:56px;
+  }
+  .shot{
+    position:relative;overflow:hidden;border:1px solid var(--line);border-radius:18px;
+    background:#08151D;min-height:260px;margin:0;
+  }
+  .shot-main{grid-row:span 2;min-height:600px}
+  .shot-wide{grid-column:1/-1;min-height:180px}
+  .shot img{width:100%;height:100%;display:block;object-fit:cover;transition:transform .7s var(--ease),filter .7s var(--ease)}
+  .shot-main img{object-position:center}
+  .shot-wide img{object-fit:contain;padding:32px;background:#0B1A23}
+  .shot:hover img{transform:scale(1.018);filter:brightness(1.05)}
+  .shot-copy{
+    position:absolute;left:0;right:0;bottom:0;padding:68px 24px 22px;
+    background:linear-gradient(180deg,transparent,rgba(4,12,17,.94));
+  }
+  .shot-copy h3{margin:0 0 6px;font-size:18px;font-weight:600}
+  .shot-copy p{margin:0;color:#A9BCC8;font-size:13px;line-height:1.65}
 
   /* ---------- 规格 ---------- */
   .spec-grid{
@@ -250,6 +282,11 @@
     .ink-notes div{padding:22px 0}
     .row{grid-template-columns:44px minmax(0,1fr);gap:14px 16px}
     .row p{grid-column:2}
+    .gallery-head{display:block}
+    .shot-grid{grid-template-columns:1fr}
+    .shot-main{grid-row:auto;min-height:390px}
+    .shot-wide{grid-column:auto;min-height:220px}
+    .shot{min-height:300px}
     .spec-grid{grid-template-columns:1fr;column-gap:0}
     .license-copy{grid-template-columns:1fr;gap:32px}
     .license-links{justify-content:flex-start}
@@ -267,9 +304,10 @@
 <div class="grain" aria-hidden="true"></div>
 
 <header class="topbar" id="topbar">
-  <a class="brand" href="#top">SETBoard <span>迅教科技</span></a>
+  <a class="brand" href="#top">SETBoard <span>迅教白板</span></a>
   <nav class="topnav" aria-label="页面导航">
     <a href="#ink">笔锋</a>
+    <a href="#features">功能</a>
     <a href="#class">课堂</a>
     <a href="#spec">规格</a>
     <a href="#license">许可</a>
@@ -283,7 +321,7 @@
     <div class="hero-copy">
       <p class="eyebrow mono">Windows · 触屏教学白板</p>
       <h1>把黑板<br>装进<em>触摸屏</em></h1>
-      <p class="lede">为电子白板与触控一体机而写：落笔即刻出墨，压感带出笔锋，手指与笔各司其职。没有多余面板，只有一整块可写的板面。</p>
+      <p class="lede">为电子白板与触控一体机而写：落笔即刻出墨，压感带出笔锋；函数、三维几何、图片与桌面批注都留在同一套简洁工具里。</p>
       <div class="actions">
         <a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/releases/latest">下载 Windows 版</a>
         <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">查看源码</a>
@@ -331,19 +369,39 @@
           <path class="draw" style="--len:120;animation-delay:.95s" pathLength="120" d="M392 300 l 0 -34 l 26 0 l -26 34 l 26 0" />
         </g>
 
-        <!-- 抛物线坐标系 -->
-        <g class="chalk" stroke-width="3.4" opacity=".9">
-          <path class="draw" style="--len:420;animation-delay:1.05s" pathLength="420" d="M640 470 L 860 470" />
-          <path class="draw" style="--len:360;animation-delay:1.15s" pathLength="360" d="M700 520 L 700 330" />
-          <path class="draw" style="--len:640;animation-delay:1.3s" pathLength="640" d="M640 330 c 40 150 120 190 220 140" />
-          <circle cx="700" cy="470" r="4.5" fill="#EDF4F8" stroke="none" />
+        <!-- 多曲线函数与交点 -->
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path class="draw" style="--len:420;animation-delay:1.05s" pathLength="420" d="M602 468 L 866 468" stroke="#718793" stroke-width="2.2" />
+          <path class="draw" style="--len:360;animation-delay:1.12s" pathLength="360" d="M674 524 L 674 324" stroke="#718793" stroke-width="2.2" />
+          <path class="draw" style="--len:640;animation-delay:1.22s" pathLength="640" d="M608 512 C650 484 714 442 856 354" stroke="#4DABF7" stroke-width="4" />
+          <path class="draw" style="--len:700;animation-delay:1.34s" pathLength="700" d="M610 338 C650 456 702 512 770 448 C810 410 842 332 866 276" stroke="#FF6B6B" stroke-width="4" />
+          <circle class="point" style="animation-delay:1.88s" cx="653" cy="482" r="6" fill="#FFD54A" stroke="#FFFFFF" stroke-width="2" />
+          <circle class="point" style="animation-delay:2.02s" cx="786" cy="397" r="6" fill="#FFD54A" stroke="#FFFFFF" stroke-width="2" />
         </g>
 
-        <!-- 手写批注：箭头 + 圈注 -->
-        <g class="chalk" stroke-width="4">
-          <path class="draw" style="--len:300;animation-delay:1.5s" pathLength="300" d="M905 372 c 46 -18 82 -14 116 6" />
-          <path class="draw" style="--len:70;animation-delay:1.75s" pathLength="70" d="M996 360 l 26 18 l -26 16" />
-          <path class="draw" style="--len:420;animation-delay:1.85s" pathLength="420" d="M902 424 c 60 -22 116 -8 122 18 c 6 26 -70 34 -112 14" />
+        <!-- 三维几何：立方体与圆柱，隐藏棱使用虚线 -->
+        <g fill="none" stroke="#EDF4F8" stroke-width="3.2" stroke-linejoin="round">
+          <path class="draw" style="--len:680;animation-delay:1.5s" pathLength="680" d="M915 252 L988 274 L988 350 L915 330 Z M915 252 L946 224 L1018 245 L988 274 M1018 245 L1018 320 L988 350" />
+          <path class="draw" style="--len:300;animation-delay:1.92s" pathLength="300" d="M946 224 L946 300 L915 330 M946 300 L1018 320" stroke="#8FA1AC" stroke-dasharray="9 9" />
+        </g>
+        <g fill="none" stroke="#EDF4F8" stroke-width="3">
+          <path class="draw" style="--len:300;animation-delay:1.72s" pathLength="300" d="M1038 390 C1038 370 1122 370 1122 390 C1122 410 1038 410 1038 390Z" />
+          <path class="draw" style="--len:360;animation-delay:2.02s" pathLength="360" d="M1038 390 V460 C1038 480 1122 480 1122 460 V390" />
+          <path class="draw" style="--len:180;animation-delay:2.24s" pathLength="180" d="M1038 460 C1038 440 1122 440 1122 460" stroke="#8FA1AC" stroke-dasharray="8 8" />
+        </g>
+
+        <!-- 手绘闭合区域填色 -->
+        <path class="fill-in" style="--fill-opacity:.7;animation-delay:2.1s" d="M934 490 C969 462 1028 468 1044 510 C1058 547 1018 578 970 564 C930 552 910 518 934 490Z" fill="#51CF66" />
+        <path class="draw" style="--len:520;animation-delay:1.72s" pathLength="520" d="M934 490 C969 462 1028 468 1044 510 C1058 547 1018 578 970 564 C930 552 910 518 934 490Z" fill="none" stroke="#EDF4F8" stroke-width="4" stroke-linecap="round" />
+
+        <!-- 图片对象的选中与缩放框 -->
+        <g>
+          <path class="draw" style="--len:460;animation-delay:2.06s" pathLength="460" d="M397 414 H523 V518 H397Z" fill="none" stroke="#DCE8EE" stroke-width="3" />
+          <path class="fill-in" style="--fill-opacity:.92;animation-delay:2.42s" d="M400 417H520V515H400Z" fill="#DCE8EE" />
+          <path class="draw" style="--len:300;animation-delay:2.5s" pathLength="300" d="M413 492 L443 454 L464 475 L482 449 L508 492Z" fill="none" stroke="#4DABF7" stroke-width="5" stroke-linejoin="round" />
+          <circle class="point" style="animation-delay:2.72s" cx="490" cy="438" r="10" fill="#FFD54A" />
+          <path class="draw" style="--len:520;animation-delay:2.68s" pathLength="520" d="M389 406 H531 V526 H389Z" fill="none" stroke="#62B7E4" stroke-width="2" stroke-dasharray="7 6" />
+          <rect class="point" style="animation-delay:3.04s" x="523" y="518" width="14" height="14" rx="3" fill="#9DDCFF" stroke="#FFFFFF" stroke-width="2" />
         </g>
 
         <!-- 侧边荧光标记 -->
@@ -400,6 +458,49 @@
     </div>
   </section>
 
+  <section id="features">
+    <div class="wrap">
+      <div class="gallery-head">
+        <div>
+          <p class="kicker mono" data-reveal>Feature Gallery</p>
+          <h2 data-reveal>不是概念图，<br>就是正在使用的界面</h2>
+        </div>
+        <p class="sub" data-reveal>完整工具栏保持在板面下方；插入内容后可移动、旋转或等比缩放，课堂操作始终在一层内完成。</p>
+      </div>
+
+      <div class="shot-grid">
+        <figure class="shot shot-main" data-reveal>
+          <img src="assets/screenshots/solids.png" alt="正方体、长方体、四棱锥、圆柱、圆锥和球的三维几何展示" loading="lazy" />
+          <figcaption class="shot-copy">
+            <h3>教材式三维几何</h3>
+            <p>六种常用立体图形，可见棱实线、隐藏棱虚线；拖动旋转视角，对单个面填色，并可通过右下角手柄整体缩放。</p>
+          </figcaption>
+        </figure>
+        <figure class="shot" data-reveal>
+          <img src="assets/screenshots/functions.png" alt="两条函数曲线及自动标注的交点坐标" loading="lazy" />
+          <figcaption class="shot-copy">
+            <h3>多曲线与交点坐标</h3>
+            <p>LaTeX 输入、多色叠加、参数滑块和函数预设；交点自动求解并标注坐标，缩放不牺牲数学精度。</p>
+          </figcaption>
+        </figure>
+        <figure class="shot" data-reveal>
+          <img src="assets/screenshots/fill-ink.png" alt="手绘闭合圆形区域被填充，旁边未闭合线条不填充" loading="lazy" />
+          <figcaption class="shot-copy">
+            <h3>手绘闭合区域填色</h3>
+            <p>点击笔画围成的区域即可上色；未闭合区域不会误填，颜色始终垫在线条下方。</p>
+          </figcaption>
+        </figure>
+        <figure class="shot shot-wide" data-reveal>
+          <img src="assets/screenshots/toolbar.png" alt="形状选择、十种快捷颜色、自定义颜色和粗细滑块组成的工具选项栏" loading="lazy" />
+          <figcaption class="shot-copy">
+            <h3>十色快捷板，也保留自定义色</h3>
+            <p>常用颜色一触即达，末尾的加号可输入十六进制颜色；粗细滑块与实时预览放在同一栏。</p>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
   <!-- 课堂流程 -->
   <section id="class">
     <div class="wrap">
@@ -416,12 +517,12 @@
         <div class="row" data-reveal>
           <span class="no mono">02</span>
           <h3>桌面批注</h3>
-          <p>最小化后保留一条浮动工具条，点开即进入全屏透明批注层，可以直接在课件、录屏、系统界面上圈画。</p>
+          <p>最小化后保留浮动入口，点开即进入全屏透明批注层；批注工具栏同样提供画笔、荧光笔、橡皮、选择、填色、五种形状、十色与自定义色。</p>
         </div>
         <div class="row" data-reveal>
           <span class="no mono">03</span>
           <h3>分页与导出</h3>
-          <p>一节课多页白板，支持撤销重做；整页导出 PNG，或存成 .setb 文件下次继续。图片可直接插入画布移动缩放。</p>
+          <p>一节课多页白板，支持撤销重做；整页导出 PNG，或存成 .setb 文件下次继续。橡皮菜单可滑动清页，误操作仍能撤销。</p>
         </div>
       </div>
     </div>
@@ -441,10 +542,12 @@
           <div><dt>输入通道</dt><dd>Win32 WM_POINTER · WM_TOUCH 直读</dd></div>
         </dl>
         <dl data-reveal>
-          <div><dt>工具</dt><dd>书写 · 荧光笔 · 橡皮 · 选择 · 形状 · 图片</dd></div>
-          <div><dt>颜色</dt><dd>6 色快捷板，1–16 级粗细</dd></div>
-          <div><dt>文件</dt><dd>.setb 存档 · PNG 导出</dd></div>
-          <div><dt>发布</dt><dd>单文件绿色版，解压即用</dd></div>
+          <div><dt>基础工具</dt><dd>移动 · 书写 · 荧光 · 橡皮 · 选择 · 填色</dd></div>
+          <div><dt>插入</dt><dd>5 种形状 · 函数 · 6 种三维体 · 图片</dd></div>
+          <div><dt>颜色 / 粗细</dt><dd>10 色快捷板 + 自定义色 · 1–16 级</dd></div>
+          <div><dt>对象操作</dt><dd>移动 · 等比缩放 · 三维旋转 · 单面填色</dd></div>
+          <div><dt>数学功能</dt><dd>LaTeX · 多曲线 · 5 类预设 · 交点坐标</dd></div>
+          <div><dt>文件 / 发布</dt><dd>.setb · PNG · Windows 单文件绿色版</dd></div>
         </dl>
       </div>
     </div>

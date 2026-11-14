@@ -3,11 +3,13 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 
 namespace SETBoard.Board;
 
 public enum BoardTool
 {
+    Pan,
     Select,
     Pen,
     Highlighter,
@@ -37,6 +39,7 @@ public sealed partial class BoardCanvas : Control
     private double _zoom = 1.0;
     private Vector _offset;
     private bool _cameraInitialized;
+    private int _viewAnimationToken;
 
     private readonly SolidColorBrush _backgroundBrush = new(Colors.White);
     private IBrush? _dotBrush;
@@ -71,6 +74,7 @@ public sealed partial class BoardCanvas : Control
         Cursor = tool switch
         {
             BoardTool.Select => ArrowCursor,
+            BoardTool.Pan => HandCursor,
             BoardTool.Eraser => HandCursor,
             BoardTool.Fill => HandCursor,
             _ => CrossCursor,
@@ -206,11 +210,7 @@ public sealed partial class BoardCanvas : Control
 
     public void ResetView()
     {
-        _zoom = 1.0;
-        _offset = new Vector(Bounds.Width / 2, Bounds.Height / 2);
-        _cameraInitialized = true;
-        ViewChanged?.Invoke(this, EventArgs.Empty);
-        InvalidateVisual();
+        AnimateView(1.0, new Vector(Bounds.Width / 2, Bounds.Height / 2));
     }
 
     public void FitToContent()
@@ -224,17 +224,46 @@ public sealed partial class BoardCanvas : Control
         }
 
         double zoom = Math.Min(Bounds.Width / content.Width, Bounds.Height / content.Height);
-        _zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
-        _offset = new Vector(
-            Bounds.Width / 2 - (content.X + content.Width / 2) * _zoom,
-            Bounds.Height / 2 - (content.Y + content.Height / 2) * _zoom);
-        _cameraInitialized = true;
-        ViewChanged?.Invoke(this, EventArgs.Empty);
-        InvalidateVisual();
+        zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
+        var offset = new Vector(
+            Bounds.Width / 2 - (content.X + content.Width / 2) * zoom,
+            Bounds.Height / 2 - (content.Y + content.Height / 2) * zoom);
+        AnimateView(zoom, offset);
+    }
+
+    private void AnimateView(double targetZoom, Vector targetOffset)
+    {
+        int token = ++_viewAnimationToken;
+        double startZoom = _zoom;
+        Vector startOffset = _offset;
+        var started = DateTime.UtcNow;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        timer.Tick += (_, _) =>
+        {
+            if (token != _viewAnimationToken)
+            {
+                timer.Stop();
+                return;
+            }
+
+            double progress = Math.Clamp((DateTime.UtcNow - started).TotalMilliseconds / 220, 0, 1);
+            double eased = 1 - Math.Pow(1 - progress, 3);
+            _zoom = startZoom + (targetZoom - startZoom) * eased;
+            _offset = new Vector(
+                startOffset.X + (targetOffset.X - startOffset.X) * eased,
+                startOffset.Y + (targetOffset.Y - startOffset.Y) * eased);
+            _cameraInitialized = true;
+            ViewChanged?.Invoke(this, EventArgs.Empty);
+            InvalidateVisual();
+            if (progress < 1) return;
+            timer.Stop();
+        };
+        timer.Start();
     }
 
     public void ZoomBy(double factor, Point? anchor = null)
     {
+        _viewAnimationToken++;
         var screenAnchor = anchor ?? new Point(Bounds.Width / 2, Bounds.Height / 2);
         var worldAnchor = ToWorld(screenAnchor);
         double next = Math.Clamp(_zoom * factor, MinZoom, MaxZoom);
@@ -406,6 +435,26 @@ public sealed partial class BoardCanvas : Control
             var rect = new Rect(p1, p2).Inflate(4);
             context.DrawRectangle(fill, stroke, rect);
         }
+
+        if (_selection.Count == 1 && _selection.First() is { } selected
+            && GetResizeHandle(selected) is { } handle)
+        {
+            var background = new SolidColorBrush(Color.FromRgb(0x7E, 0xC4, 0xE8));
+            context.DrawRectangle(background, new Pen(Brushes.White, 1.5),
+                new Rect(handle.X - 8, handle.Y - 8, 16, 16), 4, 4);
+        }
+    }
+
+    private Point? GetResizeHandle(BoardItem item)
+    {
+        if (item is not (ImageItem or FunctionItem or SolidItem or ShapeItem)) return null;
+        var rect = item switch
+        {
+            FunctionItem function => function.PlotArea,
+            ShapeItem shape => shape.Rect,
+            _ => item.Bounds,
+        };
+        return ToScreen(new Point(rect.Right, rect.Bottom)) + new Vector(4, 4);
     }
 
     private void DrawMarquee(DrawingContext context)

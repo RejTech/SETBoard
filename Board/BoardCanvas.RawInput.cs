@@ -18,6 +18,7 @@ public sealed partial class BoardCanvas
     /// <summary>直读的落点：立即开笔，不等 Avalonia 的指针事件排队。</summary>
     public void RawPointerDown(int contactId, Point screen, double pressure, bool isPen)
     {
+        _viewAnimationToken++;
         if (isPen)
         {
             _rawPenDown = true;

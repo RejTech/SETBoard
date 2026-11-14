@@ -141,6 +141,57 @@ public sealed class RotateSolidCommand : IBoardCommand
     }
 }
 
+public readonly record struct ItemSizeState(double X, double Y, double Width, double Height, double StrokeWidth = 0)
+{
+    public static ItemSizeState Capture(BoardItem item) => item switch
+    {
+        ImageItem image => new(image.X, image.Y, image.Width, image.Height),
+        FunctionItem function => new(function.Left, function.Top, function.PlotWidth, function.PlotHeight, function.Width),
+        SolidItem solid => new(solid.CenterX, solid.CenterY, solid.Size, solid.Height),
+        ShapeItem shape => new(shape.X1, shape.Y1, shape.X2, shape.Y2),
+        _ => default,
+    };
+
+    public void Apply(BoardItem item)
+    {
+        switch (item)
+        {
+            case ImageItem image:
+                image.X = X;
+                image.Y = Y;
+                image.Width = Width;
+                image.Height = Height;
+                break;
+            case FunctionItem function:
+                function.Left = X;
+                function.Top = Y;
+                function.PlotWidth = Width;
+                function.PlotHeight = Height;
+                if (StrokeWidth > 0) function.Width = StrokeWidth;
+                break;
+            case SolidItem solid:
+                solid.CenterX = X;
+                solid.CenterY = Y;
+                solid.Size = Width;
+                solid.Height = Height;
+                break;
+            case ShapeItem shape:
+                shape.X1 = X;
+                shape.Y1 = Y;
+                shape.X2 = Width;
+                shape.Y2 = Height;
+                break;
+        }
+    }
+}
+
+public sealed class ResizeItemCommand(BoardItem item, ItemSizeState before, ItemSizeState after) : IBoardCommand
+{
+    public void Undo(BoardDocument document) => before.Apply(item);
+
+    public void Redo(BoardDocument document) => after.Apply(item);
+}
+
 /// <summary>给三维几何体的某个面填色或清除填色。</summary>
 public sealed class FillSolidFaceCommand : IBoardCommand
 {

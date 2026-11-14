@@ -22,11 +22,13 @@ public partial class MainWindow : Window
     private readonly Button[] _swatches;
 
     private DispatcherTimer? _toastTimer;
+    private int _toastToken;
     private bool _dirty;
     private BoardTool _lastShape = BoardTool.Rectangle;
     private BoardTool _tool = BoardTool.Pen;
     private bool _inkOptionsOpen;
     private int _inkOptionsToken;
+    private bool _pageAnimating;
 
     public MainWindow()
     {
@@ -34,11 +36,12 @@ public partial class MainWindow : Window
 
         _toolButtons = new[]
         {
-            PenButton, HighlighterButton, EraserButton, SelectButton, FillButton, ShapeButton,
+            PanButton, PenButton, HighlighterButton, EraserButton, SelectButton, FillButton,
         };
         _swatches = new[]
         {
             WhiteSwatch, YellowSwatch, RedSwatch, GreenSwatch, BlueSwatch, GraySwatch,
+            OrangeSwatch, PurpleSwatch, CyanSwatch, BlackSwatch, CustomSwatch,
         };
 
         Board.ViewChanged += (_, _) => UpdateZoomLabel();
@@ -53,12 +56,23 @@ public partial class MainWindow : Window
         UpdateGridMenu();
         SetTool(BoardTool.Pen);
         Toast.IsVisible = false;
+        ClearPageSlider.AddHandler(PointerPressedEvent, OnClearSlidePressed, RoutingStrategies.Tunnel, true);
+        ClearPageSlider.AddHandler(PointerReleasedEvent, OnClearSlideReleased, RoutingStrategies.Bubble, true);
 
         // 点击工具条以外的地方（画布、其他按钮、菜单等）收起二级选项菜单
         AddHandler(PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel, true);
 
         // 触屏/触控笔直读：落笔与轨迹不再等 Avalonia 的指针事件排队
-        Opened += (_, _) => _rawInput ??= RawPointerInput.Attach(this, OnRawPointerSample);
+        Opened += (_, _) =>
+        {
+            _rawInput ??= RawPointerInput.Attach(this, OnRawPointerSample);
+            Board.RenderTransform = TransformOperations.Parse("scale(0.985)");
+            Dispatcher.UIThread.Post(() =>
+            {
+                Board.Opacity = 1;
+                Board.RenderTransform = TransformOperations.Parse("scale(1)");
+            }, DispatcherPriority.Render);
+        };
         Closed += (_, _) =>
         {
             _rawInput?.Dispose();
@@ -91,9 +105,10 @@ public partial class MainWindow : Window
 
     private void OnWindowPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!_inkOptionsOpen) return;
+        if (!_inkOptionsOpen && !EraserOptions.IsVisible) return;
         if (e.Source is Visual source && IsInside(source, ToolDock)) return;
         SetInkOptionsVisible(false);
+        EraserOptions.IsVisible = false;
     }
 
     /// <summary>展开/收起二级选项菜单，带淡入淡出与上浮动画。</summary>
@@ -176,7 +191,7 @@ public partial class MainWindow : Window
 
     private void UpdateGridMenu()
     {
-        GridMenuItem.Header = Board.Document.ShowGrid ? "点阵：开" : "点阵：关";
+        GridMenuItem.IsChecked = Board.Document.ShowGrid;
     }
 
     private void OnPageChanged()
@@ -197,7 +212,6 @@ public partial class MainWindow : Window
             bool active = button.Tag is string tag
                           && Enum.TryParse<BoardTool>(tag, out var value)
                           && value == tool;
-            if (button == ShapeButton) active = isShape;
             button.Classes.Set("active", active);
         }
 
@@ -209,7 +223,9 @@ public partial class MainWindow : Window
         }
 
         ShapePicker.IsVisible = isShape;
+        SolidPicker.IsVisible = false;
         SetInkOptionsVisible(false);
+        EraserOptions.IsVisible = false;
         // 填色要选颜色，直接把色板露出来
         if (tool == BoardTool.Fill) SetInkOptionsVisible(true);
         UpdateInkPreview();
@@ -225,6 +241,12 @@ public partial class MainWindow : Window
     /// <summary>再次点击已选中的工具时，展开或收起二级选项菜单。</summary>
     private void ToggleInkOptions()
     {
+        if (_tool == BoardTool.Eraser)
+        {
+            EraserOptions.IsVisible = !EraserOptions.IsVisible;
+            ClearPageSlider.Value = 0;
+            return;
+        }
         if (!HasInkOptions(_tool)) return;
         SetInkOptionsVisible(!_inkOptionsOpen);
     }
@@ -246,6 +268,8 @@ public partial class MainWindow : Window
 
     private void OnShapeButtonClick(object? sender, RoutedEventArgs e)
     {
+        CloseInsertFlyout();
+        SolidPicker.IsVisible = false;
         if (IsShapeTool(_tool))
         {
             ToggleInkOptions();
@@ -253,6 +277,34 @@ public partial class MainWindow : Window
         }
 
         SetTool(_lastShape);
+        SetInkOptionsVisible(true);
+    }
+
+    private void OnSolidButtonClick(object? sender, RoutedEventArgs e)
+    {
+        CloseInsertFlyout();
+        ShapePicker.IsVisible = false;
+        SolidPicker.IsVisible = true;
+        SetInkOptionsVisible(true);
+    }
+
+    private bool _clearSlideArmed;
+
+    private void OnClearSlidePressed(object? sender, PointerPressedEventArgs e)
+    {
+        _clearSlideArmed = ClearPageSlider.Value < 5
+            && e.GetPosition(ClearPageSlider).X < 45;
+    }
+
+    private void OnClearSlideReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        bool completed = _clearSlideArmed && ClearPageSlider.Value >= 98
+            && e.GetPosition(ClearPageSlider).X > ClearPageSlider.Bounds.Width - 30;
+        _clearSlideArmed = false;
+        ClearPageSlider.Value = 0;
+        if (!completed) return;
+        EraserOptions.IsVisible = false;
+        OnClearClick(sender, new RoutedEventArgs());
     }
 
     private void OnShapeClick(object? sender, RoutedEventArgs e)
@@ -268,6 +320,7 @@ public partial class MainWindow : Window
     /// <summary>形状选项里的「函数」：打开函数对话框，确认后把图像插到视野中央。</summary>
     private async void OnFunctionClick(object? sender, RoutedEventArgs e)
     {
+        CloseInsertFlyout();
         SetInkOptionsVisible(false);
         var dialog = new FunctionDialog(null, Board.InkColor, Board.InkWidth);
         var spec = await dialog.ShowDialog<FunctionSpec?>(this);
@@ -321,7 +374,14 @@ public partial class MainWindow : Window
     /// <summary>插入三维几何体：选中后拖动可改变观察角度。</summary>
     private void OnSolidClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { Tag: string tag } || !Enum.TryParse<SolidKind>(tag, out var kind))
+        CloseInsertFlyout();
+        string? tag = sender switch
+        {
+            Button { Tag: string buttonTag } => buttonTag,
+            MenuItem { Tag: string menuTag } => menuTag,
+            _ => null,
+        };
+        if (tag is null || !Enum.TryParse<SolidKind>(tag, out var kind))
         {
             return;
         }
@@ -382,6 +442,75 @@ public partial class MainWindow : Window
         UpdateInkPreview();
     }
 
+    private async void OnCustomColorClick(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new Window
+        {
+            Title = "自定义画笔颜色",
+            Width = 360,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = new SolidColorBrush(Color.Parse("#16252F")),
+        };
+        var input = new TextBox
+        {
+            Text = $"#{Board.InkColor & 0xFFFFFF:X6}",
+            Watermark = "#RRGGBB",
+            Width = 210,
+        };
+        var palette = new WrapPanel { Orientation = Orientation.Horizontal, ItemWidth = 38, ItemHeight = 38 };
+        uint[] samples =
+        {
+            0xFF222222, 0xFFFFFFFF, 0xFFFF6B6B, 0xFFFF922B,
+            0xFFFFD54A, 0xFF51CF66, 0xFF3BC9DB, 0xFF4DABF7,
+            0xFFB197FC, 0xFFFF80AB, 0xFF99582A, 0xFFADB5BD,
+        };
+        foreach (uint sample in samples)
+        {
+            var swatch = new Button
+            {
+                Width = 30,
+                Height = 30,
+                Margin = new Thickness(3),
+                CornerRadius = new CornerRadius(15),
+                Background = new SolidColorBrush(Color.FromUInt32(sample)),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(1),
+            };
+            swatch.Click += (_, _) => input.Text = $"#{sample & 0xFFFFFF:X6}";
+            palette.Children.Add(swatch);
+        }
+        var error = new TextBlock { Foreground = Brushes.OrangeRed, IsVisible = false, Text = "请输入 #RRGGBB 格式" };
+        var confirm = new Button { Content = "应用颜色", HorizontalAlignment = HorizontalAlignment.Right };
+        confirm.Click += (_, _) =>
+        {
+            var value = input.Text?.Trim().TrimStart('#');
+            if (value?.Length != 6 || !uint.TryParse(value, System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture, out var rgb))
+            {
+                error.IsVisible = true;
+                return;
+            }
+            dialog.Close(0xFF000000u | rgb);
+        };
+        dialog.Content = new StackPanel
+        {
+            Spacing = 12,
+            Margin = new Thickness(24),
+            Children =
+            {
+                new TextBlock { Text = "输入十六进制颜色", Foreground = Brushes.White },
+                palette, input, error, confirm,
+            },
+        };
+        var result = await dialog.ShowDialog<uint?>(this);
+        if (result is not { } color) return;
+        CustomSwatch.Tag = color.ToString("X8");
+        CustomSwatch.Background = new SolidColorBrush(Color.FromUInt32(color));
+        OnColorClick(CustomSwatch, e);
+    }
+
     private void OnInkWidthChanged(object? sender, RangeBaseValueChangedEventArgs e)
     {
         if (Board is null) return;
@@ -429,18 +558,21 @@ public partial class MainWindow : Window
         ShowToast("已清空本页，可使用撤销恢复");
     }
 
-    private void OnPrevPageClick(object? sender, RoutedEventArgs e) => Board.PreviousPage();
+    private void OnPrevPageClick(object? sender, RoutedEventArgs e) => AnimatePageChange(Board.PreviousPage, -1);
 
-    private void OnNextPageClick(object? sender, RoutedEventArgs e) => Board.NextPage();
+    private void OnNextPageClick(object? sender, RoutedEventArgs e) => AnimatePageChange(Board.NextPage, 1);
 
     private void OnAddPageClick(object? sender, RoutedEventArgs e)
     {
-        Board.AddPage();
-        MarkDirty();
-        ShowToast($"已新建第 {Board.PageNumber} 页");
+        AnimatePageChange(() =>
+        {
+            Board.AddPage();
+            MarkDirty();
+            ShowToast($"已新建第 {Board.PageNumber} 页");
+        }, 1);
     }
 
-    private void OnDeletePageClick(object? sender, RoutedEventArgs e)
+    private async void OnDeletePageClick(object? sender, RoutedEventArgs e)
     {
         if (Board.PageCount <= 1)
         {
@@ -448,16 +580,52 @@ public partial class MainWindow : Window
             return;
         }
 
-        Board.DeleteCurrentPage();
-        MarkDirty();
-        ShowToast("已删除本页");
+        if (!await ConfirmAsync("删除本页？", "此操作会清除当前撤销历史，且无法撤销。", "删除")) return;
+        AnimatePageChange(() =>
+        {
+            Board.DeleteCurrentPage();
+            MarkDirty();
+            ShowToast("已删除本页");
+        }, Board.PageNumber == Board.PageCount ? -1 : 1);
+    }
+
+    private async void AnimatePageChange(Action change, int direction)
+    {
+        if (_pageAnimating) return;
+        _pageAnimating = true;
+        Board.IsHitTestVisible = false;
+        try
+        {
+            Board.Opacity = 0;
+            Board.RenderTransform = TransformOperations.Parse($"translateX({-direction * 18}px)");
+            await Task.Delay(160);
+            change();
+            Board.RenderTransform = TransformOperations.Parse($"translateX({direction * 18}px)");
+            Dispatcher.UIThread.Post(() =>
+            {
+                Board.Opacity = 1;
+                Board.RenderTransform = TransformOperations.Parse("translateX(0px)");
+            }, DispatcherPriority.Render);
+            await Task.Delay(180);
+        }
+        finally
+        {
+            Board.Opacity = 1;
+            Board.RenderTransform = TransformOperations.Parse("translateX(0px)");
+            Board.IsHitTestVisible = true;
+            _pageAnimating = false;
+        }
     }
 
     private void OnZoomResetClick(object? sender, RoutedEventArgs e) => Board.ResetView();
 
     private void OnFitClick(object? sender, RoutedEventArgs e) => Board.FitToContent();
 
-    private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
+    private async void OnExitClick(object? sender, RoutedEventArgs e)
+    {
+        if (_dirty && !await ConfirmAsync("退出 SETBoard？", "尚未保存的白板内容将会丢失。", "退出")) return;
+        Close();
+    }
 
     private void OnMinimizeClick(object? sender, RoutedEventArgs e) => MinimizeToDesktop();
 
@@ -641,6 +809,7 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (_dirty && !await ConfirmAsync("打开其他白板？", "当前未保存的内容将会被替换。", "继续打开")) return;
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
                 Title = "打开白板",
@@ -691,6 +860,7 @@ public partial class MainWindow : Window
 
     private async void OnInsertImageClick(object? sender, RoutedEventArgs e)
     {
+        CloseInsertFlyout();
         try
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -761,6 +931,8 @@ public partial class MainWindow : Window
         }
     }
 
+    private void CloseInsertFlyout() => InsertButton.Flyout?.Hide();
+
     /// <summary>只读取图片尺寸，不解码到画布。</summary>
     private static Size? Measure(byte[] data)
     {
@@ -778,6 +950,7 @@ public partial class MainWindow : Window
 
     private void ShowToast(string message)
     {
+        int token = ++_toastToken;
         ToastText.Text = message;
         Toast.Opacity = 0;
         Toast.RenderTransform = TransformOperations.Parse("translateY(-8px)");
@@ -792,6 +965,7 @@ public partial class MainWindow : Window
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.6) };
         _toastTimer.Tick += (_, _) =>
         {
+            if (token != _toastToken) return;
             _toastTimer?.Stop();
             _toastTimer = null;
             Toast.Opacity = 0;
@@ -800,11 +974,69 @@ public partial class MainWindow : Window
             hide.Tick += (_, _) =>
             {
                 hide.Stop();
-                Toast.IsVisible = false;
+                if (token == _toastToken) Toast.IsVisible = false;
             };
             hide.Start();
         };
         _toastTimer.Start();
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText)
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = new SolidColorBrush(Color.Parse("#0C1B24")),
+            FontFamily = FontFamily,
+        };
+        var panel = new StackPanel { Margin = new Thickness(26, 24, 26, 22), Spacing = 10 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = 19,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.Parse("#F2F6F9")),
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = message,
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.Parse("#9FB4C1")),
+        });
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 10,
+            Margin = new Thickness(0, 12, 0, 0),
+        };
+        var cancel = new Button { Content = "取消", Padding = new Thickness(20, 7), CornerRadius = new CornerRadius(8) };
+        var confirm = new Button
+        {
+            Content = confirmText,
+            Padding = new Thickness(20, 7),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Color.Parse("#C94B50")),
+            Foreground = Brushes.White,
+        };
+        cancel.Click += (_, _) => dialog.Close(false);
+        confirm.Click += (_, _) => dialog.Close(true);
+        actions.Children.Add(cancel);
+        actions.Children.Add(confirm);
+        panel.Children.Add(actions);
+        dialog.Content = panel;
+        dialog.KeyDown += (_, args) =>
+        {
+            if (args.Key == Key.Escape) dialog.Close(false);
+        };
+        WindowFx.FadeIn(dialog, 160);
+        return await dialog.ShowDialog<bool>(this);
     }
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
@@ -863,11 +1095,11 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 break;
             case Key.PageUp:
-                Board.PreviousPage();
+                AnimatePageChange(Board.PreviousPage, -1);
                 e.Handled = true;
                 break;
             case Key.PageDown:
-                Board.NextPage();
+                AnimatePageChange(Board.NextPage, 1);
                 e.Handled = true;
                 break;
             case Key.F11:
@@ -888,6 +1120,9 @@ public partial class MainWindow : Window
                 break;
             case Key.V:
                 SetTool(BoardTool.Select);
+                break;
+            case Key.M:
+                SetTool(BoardTool.Pan);
                 break;
             case Key.P:
                 SetTool(BoardTool.Pen);

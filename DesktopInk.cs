@@ -135,7 +135,6 @@ internal sealed class DesktopAnnotationWindow : Window
             _board.SetInkWidth(e.NewValue);
             UpdateWidthPreview();
         };
-        ToolTip.SetTip(widthSlider, "画笔粗细");
         tools.Children.Add(widthSlider);
 
         _widthPreview = new Border
@@ -358,6 +357,11 @@ internal static class InkUi
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.Hand),
+            Transitions = new Transitions
+            {
+                new BrushTransition { Property = Button.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(130) },
+                new BrushTransition { Property = Button.ForegroundProperty, Duration = TimeSpan.FromMilliseconds(130) },
+            },
         };
         button.Click += (_, _) => action();
         button.PointerEntered += (_, _) =>
@@ -379,6 +383,10 @@ internal static class InkUi
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(17),
             Cursor = new Cursor(StandardCursorType.Hand),
+            Transitions = new Transitions
+            {
+                new BrushTransition { Property = Button.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(130) },
+            },
             Content = new Border
             {
                 Width = 18,
@@ -389,7 +397,6 @@ internal static class InkUi
                 BorderThickness = new Thickness(1),
             },
         };
-        ToolTip.SetTip(button, name);
         button.Click += (_, _) => action();
         button.PointerEntered += (_, _) =>
             button.Background = new SolidColorBrush(Color.Parse("#33424E"));
