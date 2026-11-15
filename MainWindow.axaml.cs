@@ -18,6 +18,50 @@ namespace SETBoard;
 
 public partial class MainWindow : Window
 {
+    /// <summary>软件图标，所有弹窗共用。</summary>
+    private static readonly ImageBrush AppIcon = new(
+        new Bitmap(@"f:\SwiftEducationTechnology\SETBoard\Assets\icon.png"))
+    {
+        Stretch = Stretch.Uniform,
+    };
+
+    /// <summary>统一弹窗视觉语言：标题图标 + 圆角面板 + 柔和阴影。</summary>
+    private static void SetupDialog(Window dialog, string title)
+    {
+        dialog.Title = title;
+        dialog.Width = 420;
+        dialog.SizeToContent = SizeToContent.Height;
+        dialog.CanResize = false;
+        dialog.ShowInTaskbar = false;
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        dialog.Background = new SolidColorBrush(Color.Parse("#0C1B24"));
+        dialog.FontFamily = new FontFamily("Microsoft YaHei UI, Microsoft YaHei, Segoe UI");
+        dialog.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
+
+        // 窗口左上角图标（通过 Tag 暂存）
+        dialog.Tag = title;
+    }
+
+    /// <summary>创建统一风格的弹窗内容面板。</summary>
+    private static StackPanel CreateDialogPanel(params Control[] children)
+    {
+        var panel = new StackPanel { Margin = new Thickness(28, 18, 28, 22), Spacing = 10 };
+        foreach (var child in children)
+            panel.Children.Add(child);
+        return panel;
+    }
+
+    /// <summary>创建统一风格的弹窗按钮。</summary>
+    private static Button CreateDialogButton(string text, string bgColor = "#33424E", string textColor = "#FFFFFF") => new()
+    {
+        Content = text,
+        Padding = new Thickness(20, 8, 20, 8),
+        CornerRadius = new CornerRadius(10),
+        Background = new SolidColorBrush(Color.Parse(bgColor)),
+        Foreground = new SolidColorBrush(Color.Parse(textColor)),
+        FontSize = 13,
+    };
+
     private readonly Button[] _toolButtons;
     private readonly Button[] _swatches;
 
@@ -444,66 +488,196 @@ public partial class MainWindow : Window
 
     private async void OnCustomColorClick(object? sender, RoutedEventArgs e)
     {
-        var dialog = new Window
+        var dialog = new Window();
+        SetupDialog(dialog, "自定义画笔颜色");
+        dialog.MaxWidth = 640;
+        dialog.SizeToContent = SizeToContent.WidthAndHeight;
+
+        uint currentRgb = Board.InkColor & 0xFFFFFF;
+        byte[] channels = [(byte)((currentRgb >> 16) & 0xFF), (byte)((currentRgb >> 8) & 0xFF), (byte)(currentRgb & 0xFF)];
+
+        var preview = new Border
         {
-            Title = "自定义画笔颜色",
-            Width = 360,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new SolidColorBrush(Color.Parse("#16252F")),
+            Width = 52, Height = 52, CornerRadius = new CornerRadius(14),
+            Background = new SolidColorBrush(Color.FromRgb(channels[0], channels[1], channels[2])),
+            HorizontalAlignment = HorizontalAlignment.Center,
         };
-        var input = new TextBox
+
+        var rgbPanel = new StackPanel { Spacing = 0, HorizontalAlignment = HorizontalAlignment.Center };
+        Slider[] sliders = new Slider[3];
+        TextBlock[] hexLabels = new TextBlock[3];
+        for (int i = 0; i < 3; i++)
         {
-            Text = $"#{Board.InkColor & 0xFFFFFF:X6}",
-            Watermark = "#RRGGBB",
-            Width = 210,
-        };
-        var palette = new WrapPanel { Orientation = Orientation.Horizontal, ItemWidth = 38, ItemHeight = 38 };
-        uint[] samples =
-        {
-            0xFF222222, 0xFFFFFFFF, 0xFFFF6B6B, 0xFFFF922B,
-            0xFFFFD54A, 0xFF51CF66, 0xFF3BC9DB, 0xFF4DABF7,
-            0xFFB197FC, 0xFFFF80AB, 0xFF99582A, 0xFFADB5BD,
-        };
-        foreach (uint sample in samples)
-        {
-            var swatch = new Button
+            int idx = i;
+            var hl = new TextBlock
             {
-                Width = 30,
-                Height = 30,
-                Margin = new Thickness(3),
-                CornerRadius = new CornerRadius(15),
-                Background = new SolidColorBrush(Color.FromUInt32(sample)),
-                BorderBrush = Brushes.White,
-                BorderThickness = new Thickness(1),
+                Text = channels[idx].ToString("X2"),
+                FontSize = 12, FontWeight = FontWeight.Medium,
+                Foreground = Brushes.LightGray,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 0, 56, 0),
             };
-            swatch.Click += (_, _) => input.Text = $"#{sample & 0xFFFFFF:X6}";
-            palette.Children.Add(swatch);
+
+            var sl = new Slider
+            {
+                Value = channels[idx], Minimum = 0, Maximum = 255,
+                Width = 260, Margin = new Thickness(0, 4, 0, 8), Foreground = Brushes.White,
+            };
+
+            sl.ValueChanged += (_, __) =>
+            {
+                byte val = (byte)Math.Round(sl.Value);
+                channels[idx] = val;
+                hl.Text = val.ToString("X2");
+                preview.Background = new SolidColorBrush(Color.FromRgb(channels[0], channels[1], channels[2]));
+            };
+
+            var label = new TextBlock { Text = i == 0 ? "R" : i == 1 ? "G" : "B", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White, Width = 18 };
+            rgbPanel.Children.Add(new StackPanel { Spacing = 2, Children = { label, sl, hl } });
+            sliders[i] = sl;
+            hexLabels[i] = hl;
         }
-        var error = new TextBlock { Foreground = Brushes.OrangeRed, IsVisible = false, Text = "请输入 #RRGGBB 格式" };
+
+        void ApplyPreset(uint color)
+        {
+            byte r = (byte)((color >> 16) & 0xFF);
+            byte g = (byte)((color >> 8) & 0xFF);
+            byte b = (byte)(color & 0xFF);
+            channels[0] = r; channels[1] = g; channels[2] = b;
+            sliders[0].Value = r; sliders[1].Value = g; sliders[2].Value = b;
+            hexLabels[0].Text = r.ToString("X2");
+            hexLabels[1].Text = g.ToString("X2");
+            hexLabels[2].Text = b.ToString("X2");
+            preview.Background = new SolidColorBrush(Color.FromRgb(r, g, b));
+        }
+
+        var palette = new StackPanel { Spacing = 8 };
+
+        void AddSection(string title, uint[] colors)
+        {
+            var section = new StackPanel { Spacing = 6 };
+            section.Children.Add(new TextBlock
+            {
+                Text = title, FontSize = 11, FontWeight = FontWeight.Medium,
+                Foreground = Brushes.Gray, Margin = new Thickness(0, 2, 0, 2),
+            });
+            var row = new WrapPanel { Orientation = Orientation.Horizontal };
+            foreach (uint c in colors)
+            {
+                var sw = new Button
+                {
+                    Width = 28, Height = 28, Margin = new Thickness(2),
+                    CornerRadius = new CornerRadius(14),
+                    Background = new SolidColorBrush(Color.FromUInt32(c)),
+                    BorderBrush = Brushes.White, BorderThickness = new Thickness(1),
+                };
+                sw.Click += (_, _) => ApplyPreset(c);
+                row.Children.Add(sw);
+            }
+            section.Children.Add(row);
+            palette.Children.Add(section);
+        }
+
+        // 黑白灰
+        AddSection("黑白灰", new[] { 0xFF000000u, 0xFF2B2B2B, 0xFF4A4A4A, 0xFF6E6E6E, 0xFF999999, 0xFFBBBBBB, 0xFFDDDDDD, 0xFFFFFFFF });
+        // 红色系
+        AddSection("红", new[] { 0xFF8B0000u, 0xFFC0392B, 0xFFE74C3C, 0xFFFF6B6B, 0xFFFA5454, 0xFFFF8A8A, 0xFFFFCDCD, 0xFFFCE4EC });
+        // 橙色系
+        AddSection("橙", new[] { 0xFFE65100u, 0xFFEF6C00, 0xFFFA7404, 0xFFFF922B, 0xFFFFA726, 0xFFFFD180, 0xFFFFE0B2, 0xFFFFF3E0 });
+        // 黄色系
+        AddSection("黄", new[] { 0xFFFDD835u, 0xFFFFEA00, 0xFFFFD54A, 0xFFFFEE55, 0xFFFFF176, 0xFFFFF9C4, 0xFFFFFF80, 0xFFFFFFB0 });
+        // 绿色系
+        AddSection("绿", new[] { 0xFF2E7D32u, 0xFF43A047, 0xFF66BB6A, 0xFF51CF66, 0xFF81C784, 0xFFA5D6A7, 0xFFC8E6C9, 0xFFE8F5E9 });
+        // 青色系
+        AddSection("青", new[] { 0xFF0083B0u, 0xFF00ACC1, 0xFF26C6DA, 0xFF3BC9DB, 0xFF4DD0E1, 0xFF80DEEA, 0xFFB2EBF0, 0xFFE0F7FA });
+        // 蓝色系
+        AddSection("蓝", new[] { 0xFF1A237Eu, 0xFF3949AB, 0xFF4DABF7, 0xFF5C6BC0, 0xFF7986CB, 0xFF9FA8DA, 0xFFBBDEFB, 0xFFE3F2FD });
+        // 紫色系
+        AddSection("紫", new[] { 0xFF4A148Cu, 0xFF7B1FA2, 0xFFAB47BC, 0xFFB197FC, 0xFFCE93D8, 0xFFE1BEE7, 0xFFEA8CFC, 0xFFF3E5F5 });
+        // 粉/玫红
+        AddSection("粉", new[] { 0xFFAD1457u, 0xFFC2185B, 0xFFEC407A, 0xFFFF80AB, 0xFFE91E63, 0xFFF48FB1, 0xFFFCE4EC, 0xFFFAE4EF });
+        // 棕色/大地
+        AddSection("棕", new[] { 0xFF3E2723u, 0xFF5D4037, 0xFF8D6E63, 0xFF99582A, 0xFFA1887F, 0xFFBCAAA4, 0xFFD7CCC8, 0xFFFBE9E7 });
+
+        // 左侧：预览 + RGB 滑块 + 确认按钮
         var confirm = new Button { Content = "应用颜色", HorizontalAlignment = HorizontalAlignment.Right };
         confirm.Click += (_, _) =>
         {
-            var value = input.Text?.Trim().TrimStart('#');
-            if (value?.Length != 6 || !uint.TryParse(value, System.Globalization.NumberStyles.HexNumber,
-                    System.Globalization.CultureInfo.InvariantCulture, out var rgb))
-            {
-                error.IsVisible = true;
-                return;
-            }
-            dialog.Close(0xFF000000u | rgb);
+            var bg = (SolidColorBrush)preview.Background;
+            dialog.Close(0xFF000000u | ((uint)bg.Color.R << 16) | ((uint)bg.Color.G << 8) | (uint)bg.Color.B);
         };
-        dialog.Content = new StackPanel
+
+        var title = new TextBlock { Text = "选择画笔颜色", Foreground = Brushes.White, FontSize = 14, Margin = new Thickness(0, 0, 0, 6) };
+
+        // 左侧：预览 + RGB 滑块 + 确认按钮
+        var leftPanel = new StackPanel { Spacing = 12 };
+        leftPanel.Children.Add(preview);
+        leftPanel.Children.Add(rgbPanel);
+        leftPanel.Children.Add(confirm);
+
+        // 右侧：色板（滚动）
+        var paletteScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        paletteScroll.Content = palette;
+
+        // 左右并排
+        var contentPanel = new StackPanel
         {
-            Spacing = 12,
+            Spacing = 14,
             Margin = new Thickness(24),
             Children =
             {
-                new TextBlock { Text = "输入十六进制颜色", Foreground = Brushes.White },
-                palette, input, error, confirm,
+                title,
+                new Grid
+                {
+                    ColumnDefinitions =
+                    {
+                        new ColumnDefinition { Width = GridLength.Auto },
+                        new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                    },
+                    RowDefinitions =
+                    {
+                        new RowDefinition(),
+                        new RowDefinition { Height = GridLength.Auto },
+                    },
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Children =
+                    {
+                        leftPanel,
+                        paletteScroll,
+                    },
+                },
             },
         };
+
+        Grid.SetColumn(leftPanel, 0);
+        Grid.SetColumn(paletteScroll, 1);
+
+        dialog.Content = contentPanel;
+
+        // 根据可用宽度自动折叠/展开色板内容
+        double? savedWidth = null;
+        bool isWide = true;
+        dialog.SizeChanged += (s, ev) =>
+        {
+            var w = ev.NewSize.Width;
+            if (w > 0 && savedWidth.HasValue && Math.Abs(w - savedWidth.Value) < 1) return;
+            savedWidth = w;
+            bool narrow = w < 400;
+            if (narrow && isWide)
+            {
+                // 变窄：上下排列
+                Grid.SetRow(paletteScroll, 1);
+                paletteScroll.MaxHeight = w - 120;
+            }
+            else if (!narrow && !isWide)
+            {
+                // 变宽：左右并排
+                Grid.SetRow(paletteScroll, 0);
+                paletteScroll.MaxHeight = double.NaN;
+            }
+            isWide = !narrow;
+        };
+
         var result = await dialog.ShowDialog<uint?>(this);
         if (result is not { } color) return;
         CustomSwatch.Tag = color.ToString("X8");
@@ -699,31 +873,31 @@ public partial class MainWindow : Window
 
     private void OnAboutClick(object? sender, RoutedEventArgs e)
     {
-        var dialog = new Window
-        {
-            Title = "关于 SETBoard",
-            Width = 380,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            ShowInTaskbar = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new SolidColorBrush(Color.Parse("#0C1B24")),
-            FontFamily = new FontFamily("Microsoft YaHei UI, Microsoft YaHei, Segoe UI"),
-        };
+        var dialog = new Window();
+        SetupDialog(dialog, "关于 SETBoard");
 
-        var panel = new StackPanel { Margin = new Thickness(28, 24, 28, 22), Spacing = 4 };
-        panel.Children.Add(new TextBlock
+        // 标题栏：图标 + 标题文字
+        var iconBorder = new Border
         {
-            Text = "SETBoard 白板",
-            FontSize = 22,
-            FontWeight = FontWeight.SemiBold,
+            Width = 32, Height = 32, CornerRadius = new CornerRadius(8),
+            Background = AppIcon,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        titleRow.Children.Add(iconBorder);
+        titleRow.Children.Add(new TextBlock
+        {
+            Text = "关于 SETBoard", FontSize = 18, FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.Parse("#F2F6F9")),
+            VerticalAlignment = VerticalAlignment.Center,
         });
+
+        var panel = new StackPanel { Margin = new Thickness(28, 18, 28, 22), Spacing = 10 };
+        panel.Children.Add(titleRow);
         panel.Children.Add(new TextBlock
         {
             Text = "Swift Education Technology",
             FontSize = 13,
-            Margin = new Thickness(0, 8, 0, 0),
             Foreground = new SolidColorBrush(Color.Parse("#9FB4C1")),
         });
         panel.Children.Add(new TextBlock
@@ -736,28 +910,15 @@ public partial class MainWindow : Window
         {
             Text = $"版本 {AppVersion}",
             FontSize = 12,
-            Margin = new Thickness(0, 6, 0, 0),
             Foreground = new SolidColorBrush(Color.Parse("#6F8493")),
         });
 
-        var close = new Button
-        {
-            Content = "关闭",
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 18, 0, 0),
-            Padding = new Thickness(22, 7, 22, 7),
-            CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(Color.Parse("#33424E")),
-            Foreground = Brushes.White,
-        };
-        close.Click += (_, _) => dialog.Close();
-        panel.Children.Add(close);
+        var closeBtn = CreateDialogButton("关闭");
+        closeBtn.Click += (_, _) => dialog.Close();
+        panel.Children.Add(closeBtn);
 
         dialog.Content = panel;
-        dialog.KeyDown += (_, args) =>
-        {
-            if (args.Key == Key.Escape) dialog.Close();
-        };
+        dialog.KeyDown += (_, args) => { if (args.Key == Key.Escape) dialog.Close(); };
         WindowFx.FadeIn(dialog);
         _ = dialog.ShowDialog(this);
     }
@@ -983,25 +1144,27 @@ public partial class MainWindow : Window
 
     private async Task<bool> ConfirmAsync(string title, string message, string confirmText)
     {
-        var dialog = new Window
+        var dialog = new Window();
+        SetupDialog(dialog, title);
+
+        // 标题栏：图标 + 标题文字
+        var iconBorder = new Border
         {
-            Title = title,
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            ShowInTaskbar = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new SolidColorBrush(Color.Parse("#0C1B24")),
-            FontFamily = FontFamily,
+            Width = 32, Height = 32, CornerRadius = new CornerRadius(8),
+            Background = AppIcon,
+            Margin = new Thickness(0, 0, 0, 4),
         };
-        var panel = new StackPanel { Margin = new Thickness(26, 24, 26, 22), Spacing = 10 };
-        panel.Children.Add(new TextBlock
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        titleRow.Children.Add(iconBorder);
+        titleRow.Children.Add(new TextBlock
         {
-            Text = title,
-            FontSize = 19,
-            FontWeight = FontWeight.SemiBold,
+            Text = title, FontSize = 18, FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.Parse("#F2F6F9")),
+            VerticalAlignment = VerticalAlignment.Center,
         });
+
+        var panel = new StackPanel { Margin = new Thickness(28, 18, 28, 22), Spacing = 10 };
+        panel.Children.Add(titleRow);
         panel.Children.Add(new TextBlock
         {
             Text = message,
@@ -1009,32 +1172,24 @@ public partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.Parse("#9FB4C1")),
         });
-        var actions = new StackPanel
+
+        var actionsPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 10,
-            Margin = new Thickness(0, 12, 0, 0),
         };
-        var cancel = new Button { Content = "取消", Padding = new Thickness(20, 7), CornerRadius = new CornerRadius(8) };
-        var confirm = new Button
-        {
-            Content = confirmText,
-            Padding = new Thickness(20, 7),
-            CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(Color.Parse("#C94B50")),
-            Foreground = Brushes.White,
-        };
-        cancel.Click += (_, _) => dialog.Close(false);
-        confirm.Click += (_, _) => dialog.Close(true);
-        actions.Children.Add(cancel);
-        actions.Children.Add(confirm);
-        panel.Children.Add(actions);
+        var cancelBtn = CreateDialogButton("取消");
+        var confirmBtn = CreateDialogButton(confirmText, "#C94B50");
+        actionsPanel.Children.Add(cancelBtn);
+        actionsPanel.Children.Add(confirmBtn);
+        panel.Children.Add(actionsPanel);
+
+        cancelBtn.Click += (_, _) => dialog.Close(false);
+        confirmBtn.Click += (_, _) => dialog.Close(true);
+
         dialog.Content = panel;
-        dialog.KeyDown += (_, args) =>
-        {
-            if (args.Key == Key.Escape) dialog.Close(false);
-        };
+        dialog.KeyDown += (_, args) => { if (args.Key == Key.Escape) dialog.Close(false); };
         WindowFx.FadeIn(dialog, 160);
         return await dialog.ShowDialog<bool>(this);
     }
