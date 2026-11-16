@@ -19,11 +19,20 @@ namespace SETBoard;
 public partial class MainWindow : Window
 {
     /// <summary>软件图标，所有弹窗共用。</summary>
-    private static readonly ImageBrush AppIcon = new(
-        new Bitmap(@"f:\SwiftEducationTechnology\SETBoard\Assets\icon.png"))
+    private static readonly ImageBrush AppIcon = CreateAppIcon();
+
+    private static ImageBrush CreateAppIcon()
     {
-        Stretch = Stretch.Uniform,
-    };
+        try
+        {
+            var bitmap = new Bitmap(@"f:\SwiftEducationTechnology\SETBoard\Assets\icon.png");
+            return new ImageBrush(bitmap) { Stretch = Stretch.Uniform };
+        }
+        catch
+        {
+            return new ImageBrush { Stretch = Stretch.Uniform };
+        }
+    }
 
     /// <summary>统一弹窗视觉语言：标题图标 + 圆角面板 + 柔和阴影。</summary>
     private static void SetupDialog(Window dialog, string title)
