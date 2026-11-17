@@ -45,6 +45,7 @@ internal sealed class DesktopInkBar : Window
             Child = panel,
         };
 
+        UiaTopmost.MakeTopmost(this);
         WindowFx.FadeIn(this);
     }
 
@@ -208,6 +209,7 @@ internal sealed class DesktopAnnotationWindow : Window
         UpdateWidthPreview();
         UpdateHistoryButtons();
 
+        UiaTopmost.MakeTopmost(this);
         WindowFx.FadeIn(this);
     }
 

@@ -175,6 +175,7 @@ internal sealed class FunctionDialog : Window
             }
         };
 
+        UiaTopmost.MakeTopmost(this);
         WindowFx.FadeIn(this);
     }
 
