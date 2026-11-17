@@ -19,7 +19,7 @@ namespace SETBoard;
 public partial class MainWindow : Window
 {
     /// <summary>软件图标，所有弹窗共用。</summary>
-    private static readonly ImageBrush AppIcon = CreateAppIcon();
+    internal static readonly ImageBrush AppIcon = CreateAppIcon();
 
     private static ImageBrush CreateAppIcon()
     {
@@ -125,6 +125,16 @@ public partial class MainWindow : Window
                 Board.Opacity = 1;
                 Board.RenderTransform = TransformOperations.Parse("scale(1)");
             }, DispatcherPriority.Render);
+
+            // 启动后延迟检测更新（避免阻塞主界面渲染）
+            Dispatcher.UIThread.Post(async () =>
+            {
+                await Task.Delay(2000);
+                await AutoUpdater.CheckAsync(update =>
+                {
+                    if (update) new UpdateDialog(this).Show(this);
+                });
+            }, DispatcherPriority.Background);
         };
         Closed += (_, _) =>
         {
@@ -921,6 +931,36 @@ public partial class MainWindow : Window
             FontSize = 12,
             Foreground = new SolidColorBrush(Color.Parse("#6F8493")),
         });
+
+        // 手动检查更新按钮
+        var checkUpdateBtn = CreateDialogButton("检查更新", "#33424E", "#FFD54A");
+        checkUpdateBtn.Click += async (_, _) =>
+        {
+            checkUpdateBtn.IsEnabled = false;
+            checkUpdateBtn.Content = "检查中…";
+
+            bool hasUpdate = await AutoUpdater.CheckAsync(_ => { });
+            if (hasUpdate)
+            {
+                new UpdateDialog(this).Show(this);
+            }
+            else
+            {
+                checkUpdateBtn.Content = "已是最新版";
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                    timer.Tick += (_, __) =>
+                    {
+                        timer.Stop();
+                        checkUpdateBtn.IsEnabled = true;
+                        checkUpdateBtn.Content = "检查更新";
+                    };
+                    timer.Start();
+                });
+            }
+        };
+        panel.Children.Add(checkUpdateBtn);
 
         var closeBtn = CreateDialogButton("关闭");
         closeBtn.Click += (_, _) => dialog.Close();

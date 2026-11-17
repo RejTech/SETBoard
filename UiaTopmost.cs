@@ -1,10 +1,12 @@
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Threading;
 
 namespace SETBoard;
 
 /// <summary>
-/// 通过 Win32 SetWindowPos + HWND_TOPMOST 实现 UI Access 级窗口置顶，
+/// 通过 Win32 SetWindowPos + HWND_TOPMOST 实现窗口置顶，
 /// 确保浮窗和笔迹层始终在所有窗口之上（包括希沃全屏覆盖窗口）。
 /// </summary>
 internal static class UiaTopmost
@@ -18,22 +20,20 @@ internal static class UiaTopmost
     private static extern bool SetWindowPos(
         IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
+    /// <summary>将窗口设为置顶。</summary>
     public static void MakeTopmost(Window window)
     {
-        var handle = window.PlatformImpl?.Handle;
-        if (handle is null) return;
-
-        IntPtr hwnd = handle.DangerousHandle;
-
-        window.Opened += (_, _) => SetTopmost(hwnd);
-        SetTopmost(hwnd);
-
-        static void SetTopmost(IntPtr h)
+        // 通过 TryGetPlatformHandle() 获取 Win32 HWND，窗口打开后回调确保句柄有效
+        window.Opened += (_, _) =>
         {
-            SetWindowPos(h, IntPtr.Zero, 0, 0, 0, 0,
+            var handle = window.TryGetPlatformHandle();
+            if (handle is null || handle.Handle == IntPtr.Zero) return;
+
+            IntPtr hwnd = handle.Handle;
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
                 (uint)(SwpNoMove | SwpNoSize | SwpNoActivate));
-            SetWindowPos(h, new IntPtr(HwndTopmost), 0, 0, 0, 0,
+            SetWindowPos(hwnd, new IntPtr(HwndTopmost), 0, 0, 0, 0,
                 (uint)(SwpNoMove | SwpNoSize | SwpNoActivate));
-        }
+        };
     }
 }
