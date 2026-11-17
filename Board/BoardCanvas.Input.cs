@@ -367,7 +367,6 @@ public sealed partial class BoardCanvas
         };
         _liveStroke.AddPoint(world, pressure, 1.0 / _zoom);
         _interaction = Interaction.Drawing;
-        _predictor.Reset();
     }
 
     private void StartShape(Point world)
@@ -647,7 +646,6 @@ public sealed partial class BoardCanvas
 
         _interaction = Interaction.None;
         _activePointerId = 0;
-        _predictor.Reset();
         InvalidateVisual();
     }
 
@@ -692,7 +690,6 @@ public sealed partial class BoardCanvas
         _liveStroke = null;
         _previewShape = null;
         _rotateTarget = null;
-        _predictor.Reset();
         _interaction = Interaction.None;
         _activePointerId = 0;
         InvalidateVisual();

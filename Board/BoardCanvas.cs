@@ -45,9 +45,6 @@ public sealed partial class BoardCanvas : Control
     private IBrush? _dotBrush;
     private Color _dotColor;
 
-    /// <summary>笔尖预测器：在真实采样前方预绘，降低感知延迟。</summary>
-    private readonly InkPredictor _predictor = new();
-
     public BoardCanvas()
     {
         Focusable = true;
@@ -82,7 +79,6 @@ public sealed partial class BoardCanvas : Control
             BoardTool.Fill => HandCursor,
             _ => CrossCursor,
         };
-        _predictor.Reset();
         InvalidateVisual();
     }
 
@@ -357,7 +353,6 @@ public sealed partial class BoardCanvas : Control
             }
 
             _liveStroke?.Draw(context);
-            DrawPredictedTip(context, visible);
             _previewShape?.Draw(context);
         }
 
@@ -381,31 +376,6 @@ public sealed partial class BoardCanvas : Control
 
         context.DrawEllipse(fill, stroke, center, EraseRadiusScreen, EraseRadiusScreen);
         context.DrawEllipse(stroke.Brush, null, center, 1, 1);
-    }
-
-    /// <summary>笔尖预测：在真实笔触前方预绘一个小圆点，降低感知延迟。</summary>
-    private void DrawPredictedTip(DrawingContext context, Rect visible)
-    {
-        if (_liveStroke is null || _liveStroke.Points.Count < 2) return;
-
-        var predicted = _predictor.Predict(_zoom);
-        if (predicted is null) return;
-
-        // 只预测正在书写时（触屏/笔），不预测形状绘制
-        if (_interaction != Interaction.Drawing) return;
-
-        // 预测点必须在可见区域内才绘制
-        if (!visible.Contains(new Rect(predicted.Value, predicted.Value))) return;
-
-        // 用当前笔宽的一半作为预测圆半径，颜色与笔迹一致但略透明
-        double radius = _liveStroke.Width * (_liveStroke.Highlighter ? 1.5 : 0.5) / _zoom;
-        var color = Color.FromUInt32(_liveStroke.Color);
-        context.DrawEllipse(
-            new SolidColorBrush(color, 0.6).ToImmutable(),
-            null,
-            predicted.Value,
-            radius,
-            radius);
     }
 
     /// <summary>点阵背景：深色板面上呈现低对比度网格点。</summary>

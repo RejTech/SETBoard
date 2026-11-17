@@ -45,13 +45,7 @@ public sealed partial class BoardCanvas
     {
         if (_interaction != Interaction.Drawing || contactId != _rawContactId) return;
 
-        var world = ToWorld(screen);
-        _liveStroke?.AddPoint(world, pressure, 1.0 / _zoom);
-
-        // 记录预测点并立即刷新：预测圆点在真实笔尖前方，感知延迟降低
-        double screenInkWidth = _liveStroke.Width * _zoom;
-        _predictor.SetInkWidth(screenInkWidth);
-        _predictor.Record(world);
+        _liveStroke?.AddPoint(ToWorld(screen), pressure, 1.0 / _zoom);
         InvalidateVisual();
     }
 
