@@ -10,6 +10,22 @@ public sealed partial class BoardCanvas
     private int _rawContactId = -1;
     private bool _rawPenDown;
     private long _rawPenTick;
+    private IReadOnlyList<Rect> _inkExclusions = Array.Empty<Rect>();
+
+    /// <summary>设置不接收笔迹的区域（画布坐标），用于避开悬浮工具栏。</summary>
+    public void SetInkExclusions(IReadOnlyList<Rect>? rects) =>
+        _inkExclusions = rects ?? Array.Empty<Rect>();
+
+    /// <summary>该屏幕点是否落在笔迹禁区内。</summary>
+    public bool IsInkExcluded(Point screen)
+    {
+        for (int i = 0; i < _inkExclusions.Count; i++)
+        {
+            if (_inkExclusions[i].Contains(screen)) return true;
+        }
+
+        return false;
+    }
 
     /// <summary>笔尖按下的时间窗口内，触摸一律视为掌触。</summary>
     public bool IsRawPenActive =>
@@ -31,6 +47,7 @@ public sealed partial class BoardCanvas
 
         if (_interaction != Interaction.None) return;
         if (Tool is not (BoardTool.Pen or BoardTool.Highlighter)) return;
+        if (IsInkExcluded(screen)) return;
 
         Focus();
         EnsureCamera();
@@ -44,6 +61,7 @@ public sealed partial class BoardCanvas
     public void RawPointerMove(int contactId, Point screen, double pressure)
     {
         if (_interaction != Interaction.Drawing || contactId != _rawContactId) return;
+        if (IsInkExcluded(screen)) return;
 
         _liveStroke?.AddPoint(ToWorld(screen), pressure, 1.0 / _zoom);
         InvalidateVisual();

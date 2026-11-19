@@ -132,6 +132,8 @@ public sealed partial class BoardCanvas
         }
 
         if (_interaction != Interaction.None) return;
+        // 悬浮工具栏区域不接收落笔，避免笔迹从半透明面板下透出
+        if (IsInkExcluded(screen)) return;
 
         bool forceErase = current.Properties.IsRightButtonPressed;
         if (current.Properties.IsMiddleButtonPressed || Tool == BoardTool.Pan && !forceErase)
@@ -209,6 +211,8 @@ public sealed partial class BoardCanvas
         switch (_interaction)
         {
             case Interaction.Drawing:
+                // 笔迹滑进工具栏区域时不再追加点，笔画停在边界
+                if (IsInkExcluded(screen)) break;
                 _liveStroke?.AddPoint(world, GetPressure(e.GetCurrentPoint(this), e.Pointer.Type), 1.0 / _zoom);
                 InvalidateVisual();
                 break;

@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using SETBoard.Board;
 
 namespace SETBoard;
@@ -82,6 +83,7 @@ internal sealed class DesktopAnnotationWindow : Window
     private readonly Button _undoButton;
     private readonly Button _redoButton;
     private readonly Border _widthPreview;
+    private readonly Border _hint;
     private RawPointerInput? _rawInput;
 
     public DesktopAnnotationWindow()
@@ -158,7 +160,7 @@ internal sealed class DesktopAnnotationWindow : Window
         tools.Children.Add(InkUi.CreateButton("清除", _board.ClearBoard));
         tools.Children.Add(InkUi.CreateButton("退出", Close));
 
-        var hint = new Border
+        _hint = new Border
         {
             Background = new SolidColorBrush(Color.Parse("#F21D2A34")),
             BorderBrush = new SolidColorBrush(Color.Parse("#2E3D48")),
@@ -180,7 +182,13 @@ internal sealed class DesktopAnnotationWindow : Window
 
         Content = new Panel
         {
-            Children = { _board, hint },
+            Children = { _board, _hint },
+        };
+
+        // 底部工具栏区域不接收笔迹，避免笔迹从半透明面板下透出
+        _hint.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Visual.BoundsProperty) UpdateInkExclusions();
         };
 
         KeyDown += (_, e) =>
@@ -262,6 +270,23 @@ internal sealed class DesktopAnnotationWindow : Window
         _redoButton.IsEnabled = _board.History.CanRedo;
     }
 
+    /// <summary>把底部工具栏占用的区域登记为笔迹禁区。</summary>
+    private void UpdateInkExclusions()
+    {
+        var topLeft = _hint.TranslatePoint(new Point(0, 0), _board);
+        if (topLeft is null) return;
+
+        double top = topLeft.Value.Y;
+        double height = _board.Bounds.Height;
+        if (top <= 0 || top >= height)
+        {
+            _board.SetInkExclusions(null);
+            return;
+        }
+
+        _board.SetInkExclusions(new[] { new Rect(0, top, _board.Bounds.Width, height - top) });
+    }
+
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
@@ -273,6 +298,7 @@ internal sealed class DesktopAnnotationWindow : Window
         Width = area.Width / screen.Scaling;
         Height = area.Height / screen.Scaling;
         _rawInput ??= RawPointerInput.Attach(this, OnRawPointerSample);
+        Dispatcher.UIThread.Post(UpdateInkExclusions, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     protected override void OnClosed(EventArgs e)

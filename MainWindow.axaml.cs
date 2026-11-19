@@ -115,6 +115,13 @@ public partial class MainWindow : Window
         // 点击工具条以外的地方（画布、其他按钮、菜单等）收起二级选项菜单
         AddHandler(PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel, true);
 
+        // 底栏悬浮面板区域不接收书写：布局变化时重算笔迹禁区
+        ToolDock.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Visual.BoundsProperty) UpdateInkExclusions();
+        };
+        SizeChanged += (_, _) => UpdateInkExclusions();
+
         // 触屏/触控笔直读：落笔与轨迹不再等 Avalonia 的指针事件排队
         Opened += (_, _) =>
         {
@@ -129,6 +136,7 @@ public partial class MainWindow : Window
             // 启动后延迟检测更新（避免阻塞主界面渲染）
             Dispatcher.UIThread.Post(async () =>
             {
+                UpdateInkExclusions();
                 await Task.Delay(2000);
                 await AutoUpdater.CheckAsync(update =>
                 {
@@ -172,6 +180,25 @@ public partial class MainWindow : Window
         if (e.Source is Visual source && IsInside(source, ToolDock)) return;
         SetInkOptionsVisible(false);
         EraserOptions.IsVisible = false;
+    }
+
+    /// <summary>把底栏悬浮面板占用的屏幕区域登记为笔迹禁区，笔迹不会从半透明面板下透出。</summary>
+    private void UpdateInkExclusions()
+    {
+        if (Board is null || ToolDock is null) return;
+
+        var topLeft = ToolDock.TranslatePoint(new Point(0, 0), Board);
+        if (topLeft is null) return;
+
+        double top = topLeft.Value.Y;
+        double height = Board.Bounds.Height;
+        if (top <= 0 || top >= height)
+        {
+            Board.SetInkExclusions(null);
+            return;
+        }
+
+        Board.SetInkExclusions(new[] { new Rect(0, top, Board.Bounds.Width, height - top) });
     }
 
     /// <summary>展开/收起二级选项菜单，带淡入淡出与上浮动画。</summary>
