@@ -31,9 +31,9 @@ internal sealed class DesktopInkBar : Window
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
 
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        panel.Children.Add(InkUi.CreateButton("批注", () => AnnotateRequested?.Invoke(this, EventArgs.Empty)));
-        panel.Children.Add(InkUi.CreateButton("白板", () => RestoreRequested?.Invoke(this, EventArgs.Empty)));
-        panel.Children.Add(InkUi.CreateButton("退出", () => ExitRequested?.Invoke(this, EventArgs.Empty)));
+        panel.Children.Add(InkUi.CreateIconButton("\uE70F", "桌面批注", () => AnnotateRequested?.Invoke(this, EventArgs.Empty)));
+        panel.Children.Add(InkUi.CreateIconButton("\uE7C3", "返回白板", () => RestoreRequested?.Invoke(this, EventArgs.Empty)));
+        panel.Children.Add(InkUi.CreateIconButton("\uE7E8", "退出", () => ExitRequested?.Invoke(this, EventArgs.Empty)));
 
         Content = new Border
         {
@@ -41,7 +41,7 @@ internal sealed class DesktopInkBar : Window
             BorderBrush = new SolidColorBrush(Color.Parse("#2E3D48")),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(22),
-            Padding = new Thickness(5),
+            Padding = new Thickness(4),
             BoxShadow = BoxShadows.Parse("0 10 26 0 #66000000"),
             Child = panel,
         };
@@ -84,7 +84,18 @@ internal sealed class DesktopAnnotationWindow : Window
     private readonly Button _redoButton;
     private readonly Border _widthPreview;
     private readonly Border _hint;
+    private readonly Border _shapePanel;
+    private readonly Button _shapeToggle;
     private RawPointerInput? _rawInput;
+
+    private static readonly (BoardTool Tool, string Tip, string Data)[] ShapeItems =
+    {
+        (BoardTool.Line, "直线", "M5 19L19 5"),
+        (BoardTool.Arrow, "箭头", "M5 19L19 5 M13.5 5H19v5.5"),
+        (BoardTool.Rectangle, "矩形", "M4.5 6.5h15v11h-15z"),
+        (BoardTool.Ellipse, "圆形", "M12 4.5a7.5 7.5 0 1 0 0 15a7.5 7.5 0 1 0 0-15"),
+        (BoardTool.Triangle, "三角形", "M12 4.5L20 19.5H4z"),
+    };
 
     public DesktopAnnotationWindow()
     {
@@ -102,17 +113,39 @@ internal sealed class DesktopAnnotationWindow : Window
         _board.SetInkColor(0xFFFF5A5F);
         _board.SetInkWidth(4);
 
+        // 形状二级菜单：展开在主行上方
+        var shapeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
+        foreach (var (tool, tip, data) in ShapeItems)
+        {
+            AddShape(shapeRow, tool, tip, data);
+        }
+
+        _shapePanel = new Border
+        {
+            Background = new SolidColorBrush(Color.Parse("#F21D2A34")),
+            BorderBrush = new SolidColorBrush(Color.Parse("#2E3D48")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(18),
+            Padding = new Thickness(5),
+            Margin = new Thickness(0, 0, 0, 6),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            IsVisible = false,
+            BoxShadow = BoxShadows.Parse("0 8 22 0 #59000000"),
+            Child = shapeRow,
+        };
+
         var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        AddTool(tools, "画笔", BoardTool.Pen);
-        AddTool(tools, "荧光", BoardTool.Highlighter);
-        AddTool(tools, "橡皮", BoardTool.Eraser);
-        AddTool(tools, "选择", BoardTool.Select);
-        AddTool(tools, "填色", BoardTool.Fill);
-        AddTool(tools, "直线", BoardTool.Line);
-        AddTool(tools, "箭头", BoardTool.Arrow);
-        AddTool(tools, "矩形", BoardTool.Rectangle);
-        AddTool(tools, "圆形", BoardTool.Ellipse);
-        AddTool(tools, "三角", BoardTool.Triangle);
+        AddTool(tools, "\uE70F", "画笔", BoardTool.Pen);
+        AddTool(tools, "\uE7E6", "荧光笔", BoardTool.Highlighter);
+        AddTool(tools, "\uE75C", "橡皮", BoardTool.Eraser);
+        AddTool(tools, "\uE8B3", "选择", BoardTool.Select);
+        AddTool(tools, "\uE790", "填色", BoardTool.Fill);
+
+        // 图形工具收进二级菜单，与主窗口一致
+        _shapeToggle = InkUi.CreateShapeButton(
+            "M4.5 6.5h9v9h-9z M15 9.5a4.5 4.5 0 1 0 0 9a4.5 4.5 0 1 0 0-9",
+            "图形", ToggleShapePanel);
+        tools.Children.Add(_shapeToggle);
 
         tools.Children.Add(InkUi.CreateDivider());
 
@@ -130,9 +163,10 @@ internal sealed class DesktopAnnotationWindow : Window
             Minimum = 1,
             Maximum = 16,
             Value = _board.InkWidth,
-            Width = 108,
+            Width = 88,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        ToolTip.SetTip(widthSlider, "笔迹粗细");
         widthSlider.ValueChanged += (_, e) =>
         {
             _board.SetInkWidth(e.NewValue);
@@ -142,7 +176,7 @@ internal sealed class DesktopAnnotationWindow : Window
 
         _widthPreview = new Border
         {
-            Width = 34,
+            Width = 28,
             Height = 4,
             CornerRadius = new CornerRadius(2),
             Background = new SolidColorBrush(Color.FromUInt32(_board.InkColor)),
@@ -153,23 +187,21 @@ internal sealed class DesktopAnnotationWindow : Window
 
         tools.Children.Add(InkUi.CreateDivider());
 
-        _undoButton = InkUi.CreateButton("撤销", _board.Undo);
-        _redoButton = InkUi.CreateButton("重做", _board.Redo);
+        _undoButton = InkUi.CreateIconButton("\uE7A7", "撤销", _board.Undo);
+        _redoButton = InkUi.CreateIconButton("\uE7A6", "重做", _board.Redo);
         tools.Children.Add(_undoButton);
         tools.Children.Add(_redoButton);
-        tools.Children.Add(InkUi.CreateButton("清除", _board.ClearBoard));
-        tools.Children.Add(InkUi.CreateButton("退出", Close));
+        tools.Children.Add(InkUi.CreateIconButton("\uE74D", "清除", _board.ClearBoard));
+        tools.Children.Add(InkUi.CreateIconButton("\uE7E8", "退出", Close));
 
-        _hint = new Border
+        var barBorder = new Border
         {
             Background = new SolidColorBrush(Color.Parse("#F21D2A34")),
             BorderBrush = new SolidColorBrush(Color.Parse("#2E3D48")),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(22),
             Padding = new Thickness(5),
-            Margin = new Thickness(0, 0, 0, 18),
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Bottom,
             BoxShadow = BoxShadows.Parse("0 8 22 0 #59000000"),
             Child = new ScrollViewer
             {
@@ -177,6 +209,19 @@ internal sealed class DesktopAnnotationWindow : Window
                 VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                 MaxWidth = 1500,
                 Content = tools,
+            },
+        };
+
+        _hint = new Border
+        {
+            Background = Brushes.Transparent,
+            Margin = new Thickness(0, 0, 0, 18),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Child = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Children = { _shapePanel, barBorder },
             },
         };
 
@@ -221,12 +266,27 @@ internal sealed class DesktopAnnotationWindow : Window
         WindowFx.FadeIn(this);
     }
 
-    private void AddTool(Panel panel, string label, BoardTool tool)
+    private void AddTool(Panel panel, string glyph, string tip, BoardTool tool)
     {
-        var button = InkUi.CreateButton(label, () => SetTool(tool));
+        var button = InkUi.CreateIconButton(glyph, tip, () => SetTool(tool));
         _toolButtons[tool] = button;
         panel.Children.Add(button);
     }
+
+    private void AddShape(Panel panel, BoardTool tool, string tip, string data)
+    {
+        var button = InkUi.CreateShapeButton(data, tip, () =>
+        {
+            SetTool(tool);
+            SetShapePanelVisible(false);
+        });
+        _toolButtons[tool] = button;
+        panel.Children.Add(button);
+    }
+
+    private void ToggleShapePanel() => SetShapePanelVisible(!_shapePanel.IsVisible);
+
+    private void SetShapePanelVisible(bool visible) => _shapePanel.IsVisible = visible;
 
     private void AddColor(Panel panel, string name, uint color)
     {
@@ -370,18 +430,20 @@ internal static class WindowFx
 internal static class InkUi
 {
     private static readonly IBrush ActiveBrush = new SolidColorBrush(Color.Parse("#425462"));
+    private static readonly IBrush IconIdleBrush = new SolidColorBrush(Color.Parse("#D5DFE6"));
 
-    public static Button CreateButton(string text, Action action)
+    /// <summary>统一外观的图标按钮：固定尺寸 + 悬停/激活反馈 + 提示。</summary>
+    private static Button CreateChrome(string tip)
     {
         var button = new Button
         {
-            Content = text,
-            FontSize = 13,
-            Padding = new Thickness(16, 9),
+            Width = 38,
+            Height = 34,
+            Padding = new Thickness(0),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(17),
-            Foreground = new SolidColorBrush(Color.Parse("#D5DFE6")),
+            Foreground = IconIdleBrush,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.Hand),
@@ -391,11 +453,48 @@ internal static class InkUi
                 new BrushTransition { Property = Button.ForegroundProperty, Duration = TimeSpan.FromMilliseconds(130) },
             },
         };
-        button.Click += (_, _) => action();
+        ToolTip.SetTip(button, tip);
         button.PointerEntered += (_, _) =>
             button.Background = new SolidColorBrush(Color.Parse("#33424E"));
         button.PointerExited += (_, _) =>
             button.Background = button.Classes.Contains("active") ? ActiveBrush : Brushes.Transparent;
+        return button;
+    }
+
+    /// <summary>Fluent 字形图标按钮。</summary>
+    public static Button CreateIconButton(string glyph, string tip, Action action)
+    {
+        var button = CreateChrome(tip);
+        button.Content = new TextBlock
+        {
+            Text = glyph,
+            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+            FontSize = 16,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    /// <summary>矢量图形图标按钮（形状工具）。</summary>
+    public static Button CreateShapeButton(string data, string tip, Action action)
+    {
+        var button = CreateChrome(tip);
+        button.Content = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(data),
+            Width = 18,
+            Height = 18,
+            Stretch = Stretch.Uniform,
+            Stroke = new SolidColorBrush(Color.Parse("#C3D1DB")),
+            StrokeThickness = 1.7,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        button.Click += (_, _) => action();
         return button;
     }
 
@@ -446,6 +545,11 @@ internal static class InkUi
     {
         button.Classes.Set("active", active);
         button.Background = active ? ActiveBrush : Brushes.Transparent;
-        button.Foreground = active ? Brushes.White : new SolidColorBrush(Color.Parse("#D5DFE6"));
+        var foreground = active ? Brushes.White : IconIdleBrush;
+        button.Foreground = foreground;
+        if (button.Content is Avalonia.Controls.Shapes.Path path)
+        {
+            path.Stroke = foreground;
+        }
     }
 }

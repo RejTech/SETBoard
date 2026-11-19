@@ -15,13 +15,14 @@ internal static class AutoUpdater
     private const string Repo = "SETBoard";
     private const string ApiUrl = $"https://api.github.com/repos/{Owner}/{Repo}/releases/latest";
 
-    // ── 下载镜像源（按优先级排列，最后一个为直连） ────
+    // ── 下载镜像源（按优先级排列，首个为首选加速站，最后为直连） ────
     private static readonly (string Name, string UrlTemplate)[] Mirrors =
     {
-        ("ghproxy",   "https://ghproxy.com/{0}"),
+        ("gh-proxy",  "https://v4.gh-proxy.org/{0}"),
         ("ghfast",    "https://ghfast.top/{0}"),
+        ("ghproxy",   "https://ghproxy.com/{0}"),
         ("gitclone",  "https://ghcc.xyz/{0}"),
-        ("direct",    "https://github.com/{0}"),
+        ("direct",    "{0}"),
     };
 
     // ── 状态 ──────────────────────────────────────────
@@ -186,10 +187,9 @@ internal static class AutoUpdater
                 string name = asset.GetProperty("name").GetString() ?? "";
                 if (name.Contains("win-x64", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".zip"))
                 {
+                    // 保留完整下载地址，镜像模板在其前面拼接加速前缀
                     string browserUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
-                    // 提取相对路径用于镜像拼接：RejTech/SETBoard/releases/download/v1.0.5/xxx.zip
-                    string relative = ExtractRelativePath(browserUrl);
-                    return new LatestReleaseData(ver, relative, root.GetProperty("body").GetString() ?? "");
+                    return new LatestReleaseData(ver, browserUrl, root.GetProperty("body").GetString() ?? "");
                 }
             }
         }
@@ -197,28 +197,22 @@ internal static class AutoUpdater
         return null;
     }
 
-    private static string ExtractRelativePath(string url)
+    private static async Task<string> PickFastestMirror(string fileUrl)
     {
-        // https://github.com/RejTech/SETBoard/releases/download/v1.0.5/SETBoard-v1.0.5-win-x64.zip
-        var uri = new Uri(url);
-        return uri.PathAndQuery.TrimStart('/');
-    }
+        // 首选加速站可用则直接采用，避免额外测速开销
+        var (primaryOk, _, primaryUrl) = await TestMirror(Mirrors[0], fileUrl);
+        if (primaryOk) return primaryUrl;
 
-    private static async Task<string> PickFastestMirror(string relativePath)
-    {
-        // 并发测试各镜像源延迟，选最快的
-        var tasks = Mirrors.Select(m => TestMirror(m, relativePath));
-        var results = await Task.WhenAll(tasks);
-
-        // 返回第一个成功且延迟最低的 URL
-        var sorted = results.Where(r => r.Success).OrderBy(r => r.DelayMs).ToArray();
-        return sorted.Length > 0 ? sorted[0].Item3 : Mirrors[Mirrors.Length - 1].UrlTemplate.Replace("{0}", relativePath);
+        // 首选不可用时，对其余镜像并发测速
+        var results = await Task.WhenAll(Mirrors.Skip(1).Select(m => TestMirror(m, fileUrl)));
+        var fastest = results.Where(r => r.Success).OrderBy(r => r.DelayMs).FirstOrDefault();
+        return fastest.Success ? fastest.Url : primaryUrl;
     }
 
     private static async Task<(bool Success, long DelayMs, string Url)> TestMirror(
-        (string Name, string UrlTemplate) mirror, string relativePath)
+        (string Name, string UrlTemplate) mirror, string fileUrl)
     {
-        var url = string.Format(mirror.UrlTemplate, relativePath);
+        var url = string.Format(mirror.UrlTemplate, fileUrl);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         try
