@@ -860,6 +860,13 @@ public partial class MainWindow : Window
         _inkBar.ShowAtDesktopCorner();
     }
 
+    /// <summary>以浮窗模式启动（--float 参数），不显示主界面。</summary>
+    public void StartInFloatingMode()
+    {
+        _inkBar ??= CreateInkBar();
+        _inkBar.ShowAtDesktopCorner();
+    }
+
     private DesktopInkBar CreateInkBar()
     {
         var bar = new DesktopInkBar();
