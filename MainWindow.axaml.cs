@@ -860,6 +860,17 @@ public partial class MainWindow : Window
         _inkBar.ShowAtDesktopCorner();
     }
 
+    /// <summary>从其他实例唤醒：收起浮窗，显示并聚焦白板主界面。</summary>
+    public void RestoreFromExternal() => RestoreMainWindow();
+
+    private void RestoreMainWindow()
+    {
+        _inkBar?.Hide();
+        Show();
+        WindowState = WindowState.FullScreen;
+        Activate();
+    }
+
     /// <summary>以浮窗模式启动（--float 参数），不显示主界面。</summary>
     public void StartInFloatingMode()
     {
@@ -883,13 +894,7 @@ public partial class MainWindow : Window
             _annotation.Show();
             _annotation.Activate();
         };
-        bar.RestoreRequested += (_, _) =>
-        {
-            bar.Hide();
-            Show();
-            WindowState = WindowState.FullScreen;
-            Activate();
-        };
+        bar.RestoreRequested += (_, _) => RestoreMainWindow();
         bar.ExitRequested += (_, _) =>
         {
             bar.Close();
