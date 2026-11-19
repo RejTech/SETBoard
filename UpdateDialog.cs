@@ -106,9 +106,13 @@ internal sealed class UpdateDialog : Window
 
         var progressBar = new ProgressBar
         {
-            IsIndeterminate = true,
+            IsIndeterminate = false,
+            Minimum = 0,
+            Maximum = 1,
+            Value = 0,
             Height = 4,
             Margin = new Thickness(0, 8, 0, 0),
+            Foreground = new SolidColorBrush(Color.Parse("#FFD54A")),
             IsVisible = false,
         };
 
@@ -126,7 +130,19 @@ internal sealed class UpdateDialog : Window
             progressBar.IsVisible = statusText.IsVisible = true;
 
             bool success = await AutoUpdater.DownloadAndApplyAsync(
-                p => Dispatcher.UIThread.Post(() => progressBar.Value = p),
+                p => Dispatcher.UIThread.Post(() =>
+                {
+                    // p < 0 表示总大小未知，退回不确定进度条
+                    if (p < 0)
+                    {
+                        progressBar.IsIndeterminate = true;
+                    }
+                    else
+                    {
+                        progressBar.IsIndeterminate = false;
+                        progressBar.Value = Math.Clamp(p, 0, 1);
+                    }
+                }),
                 s => Dispatcher.UIThread.Post(() => statusText.Text = s));
 
             if (!success)

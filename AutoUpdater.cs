@@ -103,8 +103,33 @@ internal static class AutoUpdater
             if (!response.IsSuccessStatusCode) return false;
 
             long total = response.Content.Headers.ContentLength ?? 0;
-            using var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write);
-            await response.Content.CopyToAsync(fs);
+            using (var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+            using (var source = await response.Content.ReadAsStreamAsync())
+            {
+                var buffer = new byte[81920];
+                long received = 0;
+                int read;
+                int lastPercent = -1;
+
+                while ((read = await source.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    await fs.WriteAsync(buffer, 0, read);
+                    received += read;
+
+                    double fraction = total > 0 ? (double)received / total : 0;
+                    progress(total > 0 ? fraction : -1);
+
+                    // 状态文本按整百分比刷新，避免高频 UI 更新
+                    int percent = total > 0 ? (int)(fraction * 100) : -1;
+                    if (percent != lastPercent)
+                    {
+                        lastPercent = percent;
+                        status?.Invoke(percent >= 0
+                            ? $"正在下载 SETBoard v{_latestVersion}… {percent}%"
+                            : $"正在下载 SETBoard v{_latestVersion}… {FormatSize(received)}");
+                    }
+                }
+            }
 
             status?.Invoke("正在解压并替换文件…");
             System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, assetsDir, true);
@@ -126,6 +151,13 @@ internal static class AutoUpdater
             if (File.Exists(zipPath)) File.Delete(zipPath);
             return false;
         }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes >= 1024 * 1024) return $"{bytes / 1024.0 / 1024.0:F1} MB";
+        if (bytes >= 1024) return $"{bytes / 1024.0:F0} KB";
+        return $"{bytes} B";
     }
 
     // ── 内部实现 ──────────────────────────────────────
