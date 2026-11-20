@@ -82,8 +82,8 @@ if (Test-Path $ExePath) {
 }
 
 $urls = @(
-    "https://github.com/$Repo/releases/latest/download/SETBoard.exe",
     "https://v4.gh-proxy.org/https://github.com/$Repo/releases/latest/download/SETBoard.exe",
+    "https://github.com/$Repo/releases/latest/download/SETBoard.exe",
     "https://ghfast.top/https://github.com/$Repo/releases/latest/download/SETBoard.exe"
 )
 
