@@ -134,6 +134,32 @@
   .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:38px}
   .meta{margin:26px 0 0;font-size:12px;color:var(--dim);letter-spacing:.04em}
 
+  /* 一键安装：PowerShell 命令卡片 */
+  .quick-install{
+    margin-top:30px;max-width:580px;
+    border:1px solid var(--line);border-radius:var(--radius);
+    background:rgba(13,28,37,.72);backdrop-filter:blur(8px);
+    padding:16px 18px;
+  }
+  .quick-install-head{
+    display:flex;align-items:center;gap:8px;margin-bottom:10px;
+    font-size:12px;letter-spacing:.14em;color:var(--muted);
+  }
+  .qi-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(255,213,74,.6)}
+  .quick-install-cmd{display:flex;align-items:center;gap:10px}
+  .quick-install-cmd code{
+    flex:1;min-width:0;overflow-x:auto;white-space:nowrap;
+    font-size:13px;color:#FFE9A8;background:#0B1A23;
+    border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:11px 13px;
+  }
+  .qi-copy{
+    flex:none;height:38px;padding:0 16px;border-radius:9px;cursor:pointer;
+    border:1px solid rgba(255,255,255,.18);background:transparent;color:var(--text);
+    font-size:12.5px;transition:border-color .25s,color .25s;
+  }
+  .qi-copy:hover{border-color:var(--accent);color:var(--accent)}
+  .quick-install-note{margin:10px 0 0;font-size:12px;color:var(--dim);line-height:1.7}
+
   /* 板面 */
   .hero-visual{
     position:absolute;z-index:1;
@@ -334,6 +360,15 @@
         </button>
       </div>
       <p class="meta mono">Windows 10 / 11 · .NET 9 · Avalonia · GPL-3.0</p>
+
+      <div class="quick-install">
+        <div class="quick-install-head"><span class="qi-dot"></span>PowerShell 一键安装</div>
+        <div class="quick-install-cmd">
+          <code class="mono" id="installCmd">irm https://rejtech.github.io/SETBoard/install.ps1 | iex</code>
+          <button class="qi-copy" type="button" id="copyInstall">复制</button>
+        </div>
+        <p class="quick-install-note">在 PowerShell 中粘贴运行：自动安装 .NET 9、获取最新版 SETBoard、创建桌面快捷方式，并开启浮窗态开机自启。</p>
+      </div>
     </div>
 
     <!-- 板面：全部用矢量绘制，不依赖截图 -->
@@ -637,6 +672,25 @@
   } else if (stroke) {
     stroke.style.strokeDashoffset = "0";
     stroke.style.strokeWidth = "18";
+  }
+  // 一键安装命令复制
+  const copyBtn = document.getElementById("copyInstall");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      const text = document.getElementById("installCmd").textContent.trim();
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
+      copyBtn.textContent = "已复制";
+      setTimeout(() => { copyBtn.textContent = "复制"; }, 1600);
+    });
   }
 })();
 </script>

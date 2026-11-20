@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.Transformation;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -23,15 +24,10 @@ public partial class MainWindow : Window
 
     private static ImageBrush CreateAppIcon()
     {
-        try
-        {
-            var bitmap = new Bitmap(@"f:\SwiftEducationTechnology\SETBoard\Assets\icon.png");
-            return new ImageBrush(bitmap) { Stretch = Stretch.Uniform };
-        }
-        catch
-        {
-            return new ImageBrush { Stretch = Stretch.Uniform };
-        }
+        // Assets\** 已作为 AvaloniaResource 打包进应用包，直接从包内加载，任何机器都可用
+        using var stream = AssetLoader.Open(new Uri("avares://SETBoard/Assets/icon.png"));
+        var bitmap = new Bitmap(stream);
+        return new ImageBrush(bitmap) { Stretch = Stretch.Uniform };
     }
 
     /// <summary>统一弹窗视觉语言：标题图标 + 圆角面板 + 柔和阴影。</summary>
@@ -116,10 +112,13 @@ public partial class MainWindow : Window
         AddHandler(PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel, true);
 
         // 底栏悬浮面板区域不接收书写：布局变化时重算笔迹禁区
-        ToolDock.PropertyChanged += (_, e) =>
+        foreach (var dock in new Control[] { ToolDock, SystemDock, PageDock })
         {
-            if (e.Property == Visual.BoundsProperty) UpdateInkExclusions();
-        };
+            dock.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == Visual.BoundsProperty) UpdateInkExclusions();
+            };
+        }
         SizeChanged += (_, _) => UpdateInkExclusions();
 
         // 触屏/触控笔直读：落笔与轨迹不再等 Avalonia 的指针事件排队
@@ -182,23 +181,30 @@ public partial class MainWindow : Window
         EraserOptions.IsVisible = false;
     }
 
-    /// <summary>把底栏悬浮面板占用的屏幕区域登记为笔迹禁区，笔迹不会从半透明面板下透出。</summary>
+    /// <summary>把底栏各悬浮面板的实际占用区域登记为笔迹禁区；面板之间的空白仍可书写。</summary>
     private void UpdateInkExclusions()
     {
         if (Board is null || ToolDock is null) return;
 
-        var topLeft = ToolDock.TranslatePoint(new Point(0, 0), Board);
+        var rects = new List<Rect>();
+        AddDockExclusion(rects, ToolDock);
+        AddDockExclusion(rects, SystemDock);
+        AddDockExclusion(rects, PageDock);
+        Board.SetInkExclusions(rects);
+    }
+
+    /// <summary>把单个悬浮面板的矩形（含展开的二级菜单）换算到画布坐标后加入禁区。</summary>
+    private void AddDockExclusion(List<Rect> rects, Control dock)
+    {
+        if (!dock.IsVisible) return;
+
+        var topLeft = dock.TranslatePoint(new Point(0, 0), Board);
         if (topLeft is null) return;
 
-        double top = topLeft.Value.Y;
-        double height = Board.Bounds.Height;
-        if (top <= 0 || top >= height)
-        {
-            Board.SetInkExclusions(null);
-            return;
-        }
+        var bounds = dock.Bounds;
+        if (bounds.Width < 1 || bounds.Height < 1) return;
 
-        Board.SetInkExclusions(new[] { new Rect(0, top, Board.Bounds.Width, height - top) });
+        rects.Add(new Rect(topLeft.Value.X, topLeft.Value.Y, bounds.Width, bounds.Height));
     }
 
     /// <summary>展开/收起二级选项菜单，带淡入淡出与上浮动画。</summary>
@@ -841,10 +847,30 @@ public partial class MainWindow : Window
 
     private void OnFitClick(object? sender, RoutedEventArgs e) => Board.FitToContent();
 
+    private bool _allowExit;
+
     private async void OnExitClick(object? sender, RoutedEventArgs e)
     {
         if (_dirty && !await ConfirmAsync("退出 SETBoard？", "尚未保存的白板内容将会丢失。", "退出")) return;
+        // 主动退出：通知守护进程不要重启，并允许窗口真正关闭
+        Watchdog.SignalAllowExit();
+        _allowExit = true;
+        // 浮窗 / 批注层可能仍在，全部关闭后应用才会真正退出
+        _annotation?.Close();
+        _inkBar?.Close();
         Close();
+    }
+
+    /// <summary>非主动退出（X、Alt+F4、任务栏关闭）一律转为最小化到桌面浮窗。</summary>
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        if (!_allowExit)
+        {
+            e.Cancel = true;
+            MinimizeToDesktop();
+            return;
+        }
+        base.OnClosing(e);
     }
 
     private void OnMinimizeClick(object? sender, RoutedEventArgs e) => MinimizeToDesktop();
@@ -895,14 +921,6 @@ public partial class MainWindow : Window
             _annotation.Activate();
         };
         bar.RestoreRequested += (_, _) => RestoreMainWindow();
-        bar.ExitRequested += (_, _) =>
-        {
-            bar.Close();
-            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                desktop.Shutdown();
-            }
-        };
         return bar;
     }
 

@@ -11,12 +11,11 @@ using SETBoard.Board;
 
 namespace SETBoard;
 
-/// <summary>桌面上常驻的小浮窗：可进入桌面批注、返回白板或退出。</summary>
+/// <summary>桌面上常驻的小浮窗：可进入桌面批注或返回白板。</summary>
 internal sealed class DesktopInkBar : Window
 {
     public event EventHandler? AnnotateRequested;
     public event EventHandler? RestoreRequested;
-    public event EventHandler? ExitRequested;
 
     public DesktopInkBar()
     {
@@ -33,7 +32,6 @@ internal sealed class DesktopInkBar : Window
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         panel.Children.Add(InkUi.CreateIconButton("\uE70F", "桌面批注", () => AnnotateRequested?.Invoke(this, EventArgs.Empty)));
         panel.Children.Add(InkUi.CreateIconButton("\uE7C3", "返回白板", () => RestoreRequested?.Invoke(this, EventArgs.Empty)));
-        panel.Children.Add(InkUi.CreateIconButton("\uE7E8", "退出", () => ExitRequested?.Invoke(this, EventArgs.Empty)));
 
         Content = new Border
         {
@@ -330,21 +328,20 @@ internal sealed class DesktopAnnotationWindow : Window
         _redoButton.IsEnabled = _board.History.CanRedo;
     }
 
-    /// <summary>把底部工具栏占用的区域登记为笔迹禁区。</summary>
+    /// <summary>把底部工具栏自身的矩形登记为笔迹禁区，两侧空白仍可书写。</summary>
     private void UpdateInkExclusions()
     {
         var topLeft = _hint.TranslatePoint(new Point(0, 0), _board);
         if (topLeft is null) return;
 
-        double top = topLeft.Value.Y;
-        double height = _board.Bounds.Height;
-        if (top <= 0 || top >= height)
+        var bounds = _hint.Bounds;
+        if (bounds.Width < 1 || bounds.Height < 1)
         {
             _board.SetInkExclusions(null);
             return;
         }
 
-        _board.SetInkExclusions(new[] { new Rect(0, top, _board.Bounds.Width, height - top) });
+        _board.SetInkExclusions(new[] { new Rect(topLeft.Value.X, topLeft.Value.Y, bounds.Width, bounds.Height) });
     }
 
     protected override void OnOpened(EventArgs e)

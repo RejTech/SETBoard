@@ -37,6 +37,9 @@ public partial class App : Application
 
                 // 后续实例请求恢复时，显示已有窗口的白板主界面
                 SingleInstance.StartListener(window.RestoreFromExternal);
+
+                // 进程守护：非主动退出被结束后自动重启
+                Watchdog.Start();
             }
         }
 

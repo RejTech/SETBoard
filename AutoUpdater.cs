@@ -140,6 +140,8 @@ internal static class AutoUpdater
                 return false;
             }
 
+            // 主动退出：通知守护进程不要重启，由外部更新进程负责替换并重启
+            Watchdog.SignalAllowExit();
             Environment.Exit(0);
             return true;
         }

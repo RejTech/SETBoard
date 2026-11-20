@@ -340,17 +340,10 @@
 
     <!-- 底部三组悬浮面板 -->
     <Grid VerticalAlignment="Bottom" Margin="18,0,18,18" ColumnDefinitions="Auto,*,Auto">
-      <!-- 左：退出 / 最小化 / 菜单 -->
-      <ContentControl Grid.Column="0" Classes="panel" CornerRadius="35"
+      <!-- 左：最小化 / 菜单 -->
+      <ContentControl x:Name="SystemDock" Grid.Column="0" Classes="panel" CornerRadius="35"
                       HorizontalAlignment="Left" VerticalAlignment="Bottom">
         <StackPanel Orientation="Horizontal">
-          <Button Classes="tool" Click="OnExitClick">
-            <StackPanel>
-              <TextBlock Classes="icon" Text="&#xE7E8;" />
-              <TextBlock Classes="label" Text="退出" />
-            </StackPanel>
-          </Button>
-
           <Button Classes="tool" Click="OnMinimizeClick">
             <StackPanel>
               <TextBlock Classes="icon" Text="&#xE921;" />
@@ -377,6 +370,8 @@
                 <MenuItem x:Name="DeletePageMenuItem" Header="删除本页…" Click="OnDeletePageClick" />
                 <Separator />
                 <MenuItem Header="关于 SETBoard" Click="OnAboutClick" />
+                <Separator />
+                <MenuItem Header="退出 SETBoard…" Click="OnExitClick" />
               </MenuFlyout>
             </Button.Flyout>
           </Button>
@@ -570,7 +565,7 @@
       </StackPanel>
 
       <!-- 右：页码导航 -->
-      <ContentControl Grid.Column="2" Classes="panel" CornerRadius="29"
+      <ContentControl x:Name="PageDock" Grid.Column="2" Classes="panel" CornerRadius="29"
                       HorizontalAlignment="Right" VerticalAlignment="Bottom">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="PrevPageButton" Classes="pager" Click="OnPrevPageClick">
