@@ -33,6 +33,14 @@ internal static class AutoUpdater
         "https://raw.githubusercontent.com/RejTech/SETBoard/master/Page/uninstall.ps1",
     };
 
+    private static readonly string[] ReinstallScriptUrls =
+    {
+        "https://rejtech.github.io/SETBoard/reinstall.ps1",
+        "https://v4.gh-proxy.org/https://raw.githubusercontent.com/RejTech/SETBoard/main/Page/reinstall.ps1",
+        "https://raw.githubusercontent.com/RejTech/SETBoard/main/Page/reinstall.ps1",
+        "https://raw.githubusercontent.com/RejTech/SETBoard/master/Page/reinstall.ps1",
+    };
+
     // ── 状态 ──────────────────────────────────────────
     private static Version? _latestVersion;
     private static string? _downloadUrl;
@@ -109,6 +117,17 @@ internal static class AutoUpdater
             "已启动外部卸载程序，期间请勿关闭 PowerShell 窗口…",
             "卸载脚本下载失败，请检查网络后重试",
             "无法启动卸载程序，请手动卸载",
+            status);
+
+    /// <summary>下载 reinstall.ps1 并交给外部 PowerShell 进程执行，随后退出本进程。</summary>
+    public static Task<bool> DownloadAndReinstallAsync(Action<string>? status) =>
+        DownloadAndRunScriptAsync(
+            ReinstallScriptUrls,
+            "SETBoard-Reinstall.ps1",
+            "正在下载重装脚本…",
+            "已启动外部重装程序：先卸载再安装，期间请勿关闭 PowerShell 窗口…",
+            "重装脚本下载失败，请检查网络后重试",
+            "无法启动重装程序，请手动重装",
             status);
 
     private static async Task<bool> DownloadAndRunScriptAsync(

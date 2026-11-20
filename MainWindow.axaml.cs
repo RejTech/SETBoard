@@ -1078,35 +1078,50 @@ public partial class MainWindow : Window
         panel.Children.Add(checkUpdateBtn);
 
         var uninstallBtn = CreateDialogButton("卸载", "#33424E", "#FF9B9B");
-        var uninstallStatus = new TextBlock
+        var reinstallBtn = CreateDialogButton("重新安装", "#33424E", "#FFD54A");
+        var actionStatus = new TextBlock
         {
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.Parse("#9FB4C1")),
             IsVisible = false,
         };
-        uninstallBtn.Click += async (_, _) =>
+
+        async Task RunScriptAsync(
+            Button button, string label, string busyLabel,
+            string confirmTitle, string confirmMessage, string confirmText,
+            Func<Action<string>, Task<bool>> run)
         {
-            if (!await ConfirmAsync(
-                    "卸载 SETBoard？",
-                    "将删除程序、桌面快捷方式和开机自启，未保存的白板内容会丢失；已保存的 .setb 文件会保留。",
-                    "卸载",
-                    dialog)) return;
+            if (!await ConfirmAsync(confirmTitle, confirmMessage, confirmText, dialog)) return;
 
-            uninstallBtn.IsEnabled = checkUpdateBtn.IsEnabled = false;
-            uninstallBtn.Content = "正在准备卸载…";
-            uninstallStatus.IsVisible = true;
+            checkUpdateBtn.IsEnabled = uninstallBtn.IsEnabled = reinstallBtn.IsEnabled = false;
+            button.Content = busyLabel;
+            actionStatus.IsVisible = true;
 
-            bool success = await AutoUpdater.DownloadAndUninstallAsync(
-                s => Dispatcher.UIThread.Post(() => uninstallStatus.Text = s));
-            if (!success)
+            if (!await run(s => Dispatcher.UIThread.Post(() => actionStatus.Text = s)))
             {
-                uninstallBtn.IsEnabled = checkUpdateBtn.IsEnabled = true;
-                uninstallBtn.Content = "卸载";
+                checkUpdateBtn.IsEnabled = uninstallBtn.IsEnabled = reinstallBtn.IsEnabled = true;
+                button.Content = label;
             }
-        };
+        }
+
+        uninstallBtn.Click += async (_, _) => await RunScriptAsync(
+            uninstallBtn, "卸载", "正在准备卸载…",
+            "卸载 SETBoard？",
+            "将删除程序、桌面快捷方式和开机自启，未保存的白板内容会丢失；已保存的 .setb 文件会保留。",
+            "卸载",
+            AutoUpdater.DownloadAndUninstallAsync);
+
+        reinstallBtn.Click += async (_, _) => await RunScriptAsync(
+            reinstallBtn, "重新安装", "正在准备重装…",
+            "重新安装 SETBoard？",
+            "将先卸载当前版本，再下载并安装最新版；未保存的白板内容会丢失，已保存的 .setb 文件会保留。",
+            "重新安装",
+            AutoUpdater.DownloadAndReinstallAsync);
+
         panel.Children.Add(uninstallBtn);
-        panel.Children.Add(uninstallStatus);
+        panel.Children.Add(reinstallBtn);
+        panel.Children.Add(actionStatus);
 
         var closeBtn = CreateDialogButton("关闭");
         closeBtn.Click += (_, _) => dialog.Close();
