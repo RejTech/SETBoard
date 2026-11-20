@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Avalonia.Threading;
 
@@ -89,8 +90,6 @@ internal static class AutoUpdater
         if (!Directory.Exists(assetsDir)) Directory.CreateDirectory(assetsDir);
 
         var zipPath = Path.Combine(assetsDir, $"SETBoard-v{_latestVersion}.zip");
-        var newExePath = Path.Combine(assetsDir, "SETBoard.exe");
-        var currentExePath = Environment.ProcessPath ?? Path.Combine(exeDir, "SETBoard.exe");
 
         status?.Invoke($"正在下载 SETBoard v{_latestVersion}…");
 
@@ -131,19 +130,17 @@ internal static class AutoUpdater
                 }
             }
 
-            status?.Invoke("正在解压并替换文件…");
-            System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, assetsDir, true);
+            status?.Invoke("正在应用更新，程序即将重启…");
+            await Task.Delay(300);
 
-            // 移动新版本 exe 到根目录
-            if (File.Exists(newExePath))
-                File.Move(newExePath, currentExePath, true);
+            // 交给独立的 PowerShell 进程完成解压替换与重启，避免本进程占用自身文件导致卡死
+            if (!LaunchExternalUpdater(zipPath, exeDir))
+            {
+                status?.Invoke("无法启动更新进程，请手动从 GitHub 下载");
+                return false;
+            }
 
-            // 清理 zip
-            if (File.Exists(zipPath)) File.Delete(zipPath);
-
-            status?.Invoke("更新完成，正在重启…");
-            await Task.Delay(500);
-            Restart();
+            Environment.Exit(0);
             return true;
         }
         catch
@@ -262,20 +259,48 @@ internal static class AutoUpdater
         }
     }
 
-    private static void Restart()
+    /// <summary>
+    /// 启动独立的 PowerShell 更新进程：等待本进程退出后解压新版本包、
+    /// 覆盖安装目录并重新启动 SETBoard。自身不再触碰正在使用的文件。
+    /// </summary>
+    private static bool LaunchExternalUpdater(string zipPath, string exeDir)
     {
-        var exe = Environment.ProcessPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SETBoard.exe");
+        string exePath = Path.Combine(exeDir, "SETBoard.exe");
+        string stageDir = Path.Combine(Path.GetTempPath(), "SETBoard-update-" + Guid.NewGuid().ToString("N"));
+
+        string script = $@"
+$ErrorActionPreference = 'Stop'
+$self = {Environment.ProcessId}
+while (Get-Process -Id $self -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 250 }}
+Start-Sleep -Milliseconds 500
+Expand-Archive -LiteralPath {Quote(zipPath)} -DestinationPath {Quote(stageDir)} -Force
+Copy-Item -Path (Join-Path {Quote(stageDir)} '*') -Destination {Quote(exeDir)} -Recurse -Force
+Start-Process -FilePath {Quote(exePath)} -WorkingDirectory {Quote(exeDir)}
+Remove-Item -LiteralPath {Quote(zipPath)} -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath {Quote(stageDir)} -Recurse -Force -ErrorAction SilentlyContinue
+";
+
+        string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+
         try
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = exe,
-                UseShellExecute = true,
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand " + encoded,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
             });
+            return true;
         }
-        catch { }
-        Environment.Exit(0);
+        catch
+        {
+            return false;
+        }
     }
+
+    private static string Quote(string value) => "'" + value.Replace("'", "''") + "'";
 
     // ── 公共查询 API（供 UI 调用） ────────────────────
     public static Version? GetLatestVersion() => _latestVersion;
