@@ -107,6 +107,7 @@ public partial class MainWindow : Window
         Toast.IsVisible = false;
         ClearPageSlider.AddHandler(PointerPressedEvent, OnClearSlidePressed, RoutingStrategies.Tunnel, true);
         ClearPageSlider.AddHandler(PointerReleasedEvent, OnClearSlideReleased, RoutingStrategies.Bubble, true);
+        EraserSizeSlider.ValueChanged += (_, e) => Board.SetEraserSize(e.NewValue);
 
         // 点击工具条以外的地方（画布、其他按钮、菜单等）收起二级选项菜单
         AddHandler(PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel, true);

@@ -513,7 +513,7 @@ public sealed partial class BoardCanvas
 
     private void EraseAt(Point world)
     {
-        double radius = EraseRadiusScreen / _zoom;
+        double radius = _eraserRadiusScreen / _zoom;
         bool changed = false;
 
         for (int i = _document.Items.Count - 1; i >= 0; i--)

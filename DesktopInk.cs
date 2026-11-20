@@ -83,6 +83,9 @@ internal sealed class DesktopAnnotationWindow : Window
     private readonly Border _widthPreview;
     private readonly Border _hint;
     private readonly Border _shapePanel;
+    private readonly Border _inkPanel;
+    private readonly StackPanel _inkRow;
+    private readonly StackPanel _eraserRow;
     private readonly Button _shapeToggle;
     private RawPointerInput? _rawInput;
 
@@ -147,14 +150,24 @@ internal sealed class DesktopAnnotationWindow : Window
 
         tools.Children.Add(InkUi.CreateDivider());
 
-        AddColor(tools, "白色", 0xFFFFFFFF);
-        AddColor(tools, "黄色", 0xFFFFD54A);
-        AddColor(tools, "红色", 0xFFFF5A5F);
-        AddColor(tools, "绿色", 0xFF51CF66);
-        AddColor(tools, "蓝色", 0xFF4DABF7);
-        AddColor(tools, "黑色", 0xFF111820);
+        _undoButton = InkUi.CreateIconButton("\uE7A7", "撤销", _board.Undo);
+        _redoButton = InkUi.CreateIconButton("\uE7A6", "重做", _board.Redo);
+        tools.Children.Add(_undoButton);
+        tools.Children.Add(_redoButton);
+        tools.Children.Add(InkUi.CreateIconButton("\uE74D", "清除", _board.ClearBoard));
+        tools.Children.Add(InkUi.CreateIconButton("\uE7E8", "退出", Close));
 
-        tools.Children.Add(InkUi.CreateDivider());
+        // 颜色 / 粗细 / 预览收进二级面板，与白板一致
+        _inkRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+
+        AddColor(_inkRow, "白色", 0xFFFFFFFF);
+        AddColor(_inkRow, "黄色", 0xFFFFD54A);
+        AddColor(_inkRow, "红色", 0xFFFF5A5F);
+        AddColor(_inkRow, "绿色", 0xFF51CF66);
+        AddColor(_inkRow, "蓝色", 0xFF4DABF7);
+        AddColor(_inkRow, "黑色", 0xFF111820);
+
+        _inkRow.Children.Add(InkUi.CreateDivider());
 
         var widthSlider = new Slider
         {
@@ -170,7 +183,7 @@ internal sealed class DesktopAnnotationWindow : Window
             _board.SetInkWidth(e.NewValue);
             UpdateWidthPreview();
         };
-        tools.Children.Add(widthSlider);
+        _inkRow.Children.Add(widthSlider);
 
         _widthPreview = new Border
         {
@@ -181,16 +194,41 @@ internal sealed class DesktopAnnotationWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(3, 0, 5, 0),
         };
-        tools.Children.Add(_widthPreview);
+        _inkRow.Children.Add(_widthPreview);
 
-        tools.Children.Add(InkUi.CreateDivider());
+        // 橡皮大小：选中橡皮时替换颜色/粗细行
+        _eraserRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, IsVisible = false };
+        _eraserRow.Children.Add(new TextBlock
+        {
+            Text = "橡皮大小",
+            Foreground = new SolidColorBrush(Color.Parse("#E8EFF4")),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 13,
+        });
+        var eraserSlider = new Slider
+        {
+            Minimum = 6,
+            Maximum = 48,
+            Value = _board.EraserSize,
+            Width = 150,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        eraserSlider.ValueChanged += (_, e) => _board.SetEraserSize(e.NewValue);
+        _eraserRow.Children.Add(eraserSlider);
 
-        _undoButton = InkUi.CreateIconButton("\uE7A7", "撤销", _board.Undo);
-        _redoButton = InkUi.CreateIconButton("\uE7A6", "重做", _board.Redo);
-        tools.Children.Add(_undoButton);
-        tools.Children.Add(_redoButton);
-        tools.Children.Add(InkUi.CreateIconButton("\uE74D", "清除", _board.ClearBoard));
-        tools.Children.Add(InkUi.CreateIconButton("\uE7E8", "退出", Close));
+        _inkPanel = new Border
+        {
+            Background = new SolidColorBrush(Color.Parse("#F21D2A34")),
+            BorderBrush = new SolidColorBrush(Color.Parse("#2E3D48")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(18),
+            Padding = new Thickness(5),
+            Margin = new Thickness(0, 0, 0, 6),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            IsVisible = false,
+            BoxShadow = BoxShadows.Parse("0 8 22 0 #59000000"),
+            Child = new StackPanel { Children = { _inkRow, _eraserRow } },
+        };
 
         var barBorder = new Border
         {
@@ -219,7 +257,7 @@ internal sealed class DesktopAnnotationWindow : Window
             Child = new StackPanel
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Children = { _shapePanel, barBorder },
+                Children = { _shapePanel, _inkPanel, barBorder },
             },
         };
 
@@ -256,6 +294,8 @@ internal sealed class DesktopAnnotationWindow : Window
 
         _board.History.Changed += (_, _) => UpdateHistoryButtons();
         SetTool(BoardTool.Pen);
+        // 与白板一致：二级面板默认收起，点工具按钮时展开
+        _inkPanel.IsVisible = false;
         UpdateColorButtons();
         UpdateWidthPreview();
         UpdateHistoryButtons();
@@ -305,6 +345,19 @@ internal sealed class DesktopAnnotationWindow : Window
         {
             InkUi.SetActive(pair.Value, pair.Key == tool);
         }
+
+        // 形状工具选中时高亮图形入口，形状行收起后也能看出当前模式
+        bool isShape = false;
+        foreach (var (shapeTool, _, _) in ShapeItems) isShape |= shapeTool == tool;
+        InkUi.SetActive(_shapeToggle, isShape);
+
+        // 二级面板：书写等工具显示颜色/粗细，橡皮显示大小，选择收起
+        bool isEraser = tool == BoardTool.Eraser;
+        bool wantsInk = !isEraser && tool != BoardTool.Select;
+        _inkRow.IsVisible = wantsInk;
+        _eraserRow.IsVisible = isEraser;
+        _inkPanel.IsVisible = wantsInk || isEraser;
+        if (!wantsInk) _shapePanel.IsVisible = false;
     }
 
     private void UpdateColorButtons()

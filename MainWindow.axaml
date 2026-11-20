@@ -453,10 +453,16 @@
         </ContentControl>
 
         <ContentControl x:Name="EraserOptions" Classes="panel" CornerRadius="20" HorizontalAlignment="Center" IsVisible="False">
-          <StackPanel Orientation="Horizontal" Spacing="10" Margin="14,4">
-            <TextBlock Text="滑动清空本页" Foreground="#E8EFF4" VerticalAlignment="Center" FontSize="13" />
-            <Slider x:Name="ClearPageSlider" Minimum="0" Maximum="100" Value="0" Width="210" />
-            <TextBlock Text="→" Foreground="#FFB900" VerticalAlignment="Center" FontSize="19" />
+          <StackPanel Spacing="2" Margin="14,4">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="橡皮大小" Foreground="#E8EFF4" VerticalAlignment="Center" FontSize="13" />
+              <Slider x:Name="EraserSizeSlider" Minimum="6" Maximum="48" Value="14" Width="180" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="滑动清空本页" Foreground="#E8EFF4" VerticalAlignment="Center" FontSize="13" />
+              <Slider x:Name="ClearPageSlider" Minimum="0" Maximum="100" Value="0" Width="210" />
+              <TextBlock Text="→" Foreground="#FFB900" VerticalAlignment="Center" FontSize="19" />
+            </StackPanel>
           </StackPanel>
         </ContentControl>
 

@@ -29,7 +29,7 @@ public sealed partial class BoardCanvas : Control
     private const double MaxZoom = 6.0;
 
     /// <summary>橡皮的擦除半径，按屏幕像素固定，缩放时手感一致。</summary>
-    private const double EraseRadiusScreen = 14;
+    private double _eraserRadiusScreen = 14;
 
     private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
     private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
@@ -64,6 +64,15 @@ public sealed partial class BoardCanvas : Control
     public double InkWidth { get; private set; } = 4;
     public double Zoom => _zoom;
     public bool ShowGrid => _document.ShowGrid;
+
+    /// <summary>橡皮半径（屏幕像素），指示圈与实际擦除范围同步。</summary>
+    public double EraserSize => _eraserRadiusScreen;
+
+    public void SetEraserSize(double radius)
+    {
+        _eraserRadiusScreen = Math.Clamp(radius, 4, 64);
+        if (Tool == BoardTool.Eraser || _interaction == Interaction.Erasing) InvalidateVisual();
+    }
 
     public IReadOnlyCollection<BoardItem> Selection => _selection;
 
@@ -367,14 +376,25 @@ public sealed partial class BoardCanvas : Control
         if ((Tool != BoardTool.Eraser && _interaction != Interaction.Erasing)
             || _eraserScreen is not { } center) return;
 
-        // 板面可能是深色也可能是浅色，圈的颜色跟着反着取，保证看得清
+        // 透明板面（桌面批注）下面是任意内容，黑白双描边保证都看得清
         var background = Color.FromUInt32(_document.Background);
+        if (background.A < 0x80)
+        {
+            var outer = new Pen(new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)), 3).ToImmutable();
+            var inner = new Pen(new SolidColorBrush(Color.FromArgb(0xE6, 0x11, 0x18, 0x20)), 1.2).ToImmutable();
+            context.DrawEllipse(null, outer, center, _eraserRadiusScreen, _eraserRadiusScreen);
+            context.DrawEllipse(null, inner, center, _eraserRadiusScreen, _eraserRadiusScreen);
+            context.DrawEllipse(inner.Brush, null, center, 1, 1);
+            return;
+        }
+
+        // 板面可能是深色也可能是浅色，圈的颜色跟着反着取，保证看得清
         bool dark = background.R * 0.299 + background.G * 0.587 + background.B * 0.114 < 128;
         byte value = dark ? (byte)0xFF : (byte)0x12;
         var fill = new SolidColorBrush(Color.FromArgb(0x1A, value, value, value)).ToImmutable();
         var stroke = new Pen(new SolidColorBrush(Color.FromArgb(0xCC, value, value, value)), 1.2).ToImmutable();
 
-        context.DrawEllipse(fill, stroke, center, EraseRadiusScreen, EraseRadiusScreen);
+        context.DrawEllipse(fill, stroke, center, _eraserRadiusScreen, _eraserRadiusScreen);
         context.DrawEllipse(stroke.Brush, null, center, 1, 1);
     }
 

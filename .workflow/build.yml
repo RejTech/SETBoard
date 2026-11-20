@@ -1,0 +1,63 @@
+version: '1.0'
+name: setboard-build
+displayName: SETBoard 自动构建
+triggers:
+  trigger: auto
+  push:
+    branches:
+      precise:
+        - master
+        - main
+
+# 与 .github/workflows/release.yml 对齐：
+# 写入 version.json -> dotnet publish win-x64 单文件 -> 打 zip。
+# Gitee Go 构建机为 Linux，纯 Avalonia 托管项目可交叉发布 win-x64。
+stages:
+  - stage:
+      name: build
+      displayName: 构建 win-x64 单文件
+      jobs:
+        - job: publish
+          displayName: dotnet publish
+          steps:
+            - step: shell@default
+              name: build
+              displayName: 安装 .NET 9 并发布
+              script: |
+                set -e
+
+                # 构建机没有 dotnet 时安装 .NET 9 SDK
+                if ! command -v dotnet >/dev/null 2>&1; then
+                  curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
+                  bash dotnet-install.sh --channel 9.0 --install-dir "$HOME/.dotnet"
+                  export PATH="$HOME/.dotnet:$PATH"
+                fi
+                dotnet --version
+
+                # 版本号规则与 GitHub Actions 一致：1.0.<序号>，这里用提交数
+                VERSION="1.0.$(git rev-list --count HEAD)"
+                echo "Build version: $VERSION"
+                printf '{"version":"%s"}' "$VERSION" > version.json
+
+                dotnet publish SETBoard.csproj \
+                  -c Release \
+                  -r win-x64 \
+                  --self-contained true \
+                  -p:PublishSingleFile=true \
+                  -p:IncludeNativeLibrariesForSelfExtract=true \
+                  -p:DebugType=none \
+                  -o publish
+
+                # 打包 zip（与 GitHub Release 附件同名）
+                if command -v zip >/dev/null 2>&1; then
+                  (cd publish && zip -qr "../SETBoard-v$VERSION-win-x64.zip" .)
+                else
+                  python3 -c "import shutil; shutil.make_archive('SETBoard-v$VERSION-win-x64', 'zip', 'publish')"
+                fi
+
+                echo "===== Artifacts ====="
+                ls -lh publish/SETBoard.exe "SETBoard-v$VERSION-win-x64.zip"
+
+                # 在 Gitee Go 流水线的「制品管理」中添加收集路径即可保留产物：
+                #   publish/SETBoard.exe
+                #   SETBoard-v*-win-x64.zip
