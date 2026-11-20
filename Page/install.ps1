@@ -178,9 +178,9 @@ if ($running) {
         $allowExit.Set()
         $allowExit.Dispose()
     } catch { }
-    $running | Stop-Process -Force -ErrorAction SilentlyContinue
+    cmd /c 'taskkill /f /im SETBoard.exe >nul 2>&1'
     Start-Sleep -Seconds 2
-    Get-Process SETBoard -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    cmd /c 'taskkill /f /im SETBoard.exe >nul 2>&1'
     Write-Ok 'SETBoard stopped.'
 }
 

@@ -16,22 +16,25 @@ function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
 Write-Host ''
 Write-Host '  SETBoard uninstaller' -ForegroundColor Yellow
 
+# Started from the in-app uninstall button, give the app time to finish exiting.
+Write-Host '  Waiting 5 seconds before starting...' -ForegroundColor DarkGray
+Start-Sleep -Seconds 5
+
 # ------------------------------------------------------------- Stop processes
 Write-Step 'Stopping SETBoard'
-$running = Get-Process SETBoard -ErrorAction SilentlyContinue
-if ($running) {
+if (Get-Process SETBoard -ErrorAction SilentlyContinue) {
     # The watchdog restarts the main process unless it sees the allow-exit
-    # signal, so signal first, then stop both processes.
+    # signal, so signal first, then force-kill both processes.
     try {
         $allowExit = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::ManualReset, 'SETBoard.AllowExit')
         $allowExit.Set()
         $allowExit.Dispose()
     } catch { }
 
-    $running | Stop-Process -Force -ErrorAction SilentlyContinue
+    cmd /c 'taskkill /f /im SETBoard.exe >nul 2>&1'
     Start-Sleep -Seconds 2
     # Second pass in case anything respawned before seeing the signal.
-    Get-Process SETBoard -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    cmd /c 'taskkill /f /im SETBoard.exe >nul 2>&1'
     Write-Ok 'SETBoard and its watchdog stopped.'
 }
 else {
