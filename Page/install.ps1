@@ -1,101 +1,48 @@
-# SETBoard one-click installer
+# SETBoard one-click installer (build from source)
 # Usage (PowerShell):
 #   irm https://rejtech.github.io/SETBoard/install.ps1 | iex
 #
-# Steps: install .NET 9 -> download the latest SETBoard release ->
-# create a desktop shortcut -> enable floating-bar auto-start.
+# Steps: install .NET 9 SDK -> download the source zip (Gitee first, GitHub
+# fallback) -> dotnet publish win-x64 single file -> create a desktop shortcut
+# -> enable floating-bar auto-start.
 # Output is English-only so the script stays safe when piped through irm | iex
 # on Windows PowerShell 5.1 (no response charset = mojibake for CJK text).
 
 $ErrorActionPreference = 'Stop'
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-$Repo       = 'RejTech/SETBoard'
+$GitHubRepo = 'RejTech/SETBoard'
+$GiteeRepo  = 'rejstudios/SETBoard'   # Gitee mirror: https://gitee.com/rejstudios/SETBoard
 $InstallDir = Join-Path $env:LOCALAPPDATA 'SETBoard'
 $ExePath    = Join-Path $InstallDir 'SETBoard.exe'
+$Work       = Join-Path $env:TEMP ('SETBoard-src-' + [Guid]::NewGuid().ToString('N'))
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
 
-Write-Host ''
-Write-Host '  SETBoard installer' -ForegroundColor Yellow
-Write-Host '  Touch whiteboard for classrooms - https://github.com/RejTech/SETBoard'
-
-# ---------------------------------------------------------------- .NET 9
-Write-Step 'Checking .NET 9 runtime'
-$hasDotnet9 = $false
-try {
-    if (Get-Command dotnet -ErrorAction SilentlyContinue) {
-        $runtimes = & dotnet --list-runtimes 2>$null
-        if ($runtimes -match 'Microsoft\.NETCore\.App 9\.') { $hasDotnet9 = $true }
+function Find-DotNet {
+    $cmd = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    foreach ($p in @(
+        "$env:USERPROFILE\.dotnet\dotnet.exe",
+        "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe",
+        'C:\Program Files\dotnet\dotnet.exe')) {
+        if (Test-Path $p) { return $p }
     }
-} catch { }
-
-if ($hasDotnet9) {
-    Write-Ok '.NET 9 is already installed.'
-}
-else {
-    $installed = $false
-
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        try {
-            Write-Host '  Installing .NET 9 Desktop Runtime via winget...'
-            winget install --id Microsoft.DotNet.DesktopRuntime.9 -e --silent `
-                --accept-source-agreements --accept-package-agreements
-            if ($LASTEXITCODE -eq 0) { $installed = $true }
-        } catch { }
-    }
-
-    if (-not $installed) {
-        try {
-            Write-Host '  Installing .NET 9 via the official dotnet-install script...'
-            $di = Join-Path $env:TEMP 'dotnet-install.ps1'
-            Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $di -UseBasicParsing
-            $dotnetDir = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet'
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $di `
-                -Channel 9.0 -Runtime windowsdesktop -InstallDir $dotnetDir -NoPath
-            if ($LASTEXITCODE -eq 0) {
-                $installed = $true
-                $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-                if ($userPath -notlike "*$dotnetDir*") {
-                    [Environment]::SetEnvironmentVariable('Path', "$userPath;$dotnetDir", 'User')
-                }
-            }
-        } catch { }
-    }
-
-    if ($installed) { Write-Ok '.NET 9 installed.' }
-    else { Write-Warn '.NET 9 setup skipped/failed. SETBoard is self-contained and runs without it.' }
+    return $null
 }
 
-# ---------------------------------------------------------------- Download
-Write-Step 'Downloading the latest SETBoard'
-New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-
-if (Test-Path $ExePath) {
-    try {
-        $fs = [System.IO.File]::Open($ExePath, 'Open', 'ReadWrite', 'None')
-        $fs.Close()
-    }
-    catch {
-        throw 'SETBoard is running. Exit it first (More -> Exit SETBoard) or update from About, then re-run this installer.'
-    }
+function Test-DotNet9Sdk($exe) {
+    if (-not $exe) { return $false }
+    $sdks = & $exe --list-sdks 2>$null
+    return [bool]($sdks | Where-Object { $_ -match '^9\.' })
 }
 
-$urls = @(
-    "https://v4.gh-proxy.org/https://github.com/$Repo/releases/latest/download/SETBoard.exe",
-    "https://ghfast.top/https://github.com/$Repo/releases/latest/download/SETBoard.exe",
-    "https://github.com/$Repo/releases/latest/download/SETBoard.exe"
-)
-
-$tmp = Join-Path $env:TEMP 'SETBoard-setup.exe'
-$downloaded = $false
-Add-Type -AssemblyName System.Net.Http
-foreach ($url in $urls) {
+# Streamed HttpClient download with a throttled progress bar.
+function Save-File($url, $path, $activity) {
     $client = $null
     try {
         Write-Host "  $url"
-        # Streamed HttpClient download with a throttled progress bar.
         $client = New-Object System.Net.Http.HttpClient
         $client.Timeout = [TimeSpan]::FromSeconds(180)
         $response = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
@@ -103,7 +50,7 @@ foreach ($url in $urls) {
 
         $total = $response.Content.Headers.ContentLength
         $source = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
-        $target = [System.IO.File]::Create($tmp)
+        $target = [System.IO.File]::Create($path)
         $buffer = New-Object byte[] 81920
         $received = 0L
         $lastPercent = -1
@@ -116,31 +63,137 @@ foreach ($url in $urls) {
                 if ($percent -ne $lastPercent) {
                     $lastPercent = $percent
                     $status = '{0}%  ({1:N1} MB / {2:N1} MB)' -f $percent, ($received / 1MB), ($total / 1MB)
-                    Write-Progress -Activity 'Downloading SETBoard' -Status $status -PercentComplete $percent
+                    Write-Progress -Activity $activity -Status $status -PercentComplete $percent
                 }
             }
         }
-        Write-Progress -Activity 'Downloading SETBoard' -Completed
 
         $target.Dispose()
         $source.Dispose()
         $response.Dispose()
-        if ((Get-Item $tmp).Length -gt 1MB) { $downloaded = $true; break }
+        return $true
     }
-    catch { Write-Warn 'Source failed, trying the next mirror...' }
     finally {
-        Write-Progress -Activity 'Downloading SETBoard' -Completed -ErrorAction SilentlyContinue
+        Write-Progress -Activity $activity -Completed -ErrorAction SilentlyContinue
         if ($client) { $client.Dispose() }
     }
 }
-if (-not $downloaded) {
-    throw "Download failed. Get SETBoard.exe manually: https://github.com/$Repo/releases/latest"
+
+Write-Host ''
+Write-Host '  SETBoard installer (build from source)' -ForegroundColor Yellow
+Write-Host '  Touch whiteboard for classrooms - https://github.com/RejTech/SETBoard'
+
+# ------------------------------------------------------------- .NET 9 SDK
+Write-Step 'Checking .NET 9 SDK'
+$script:DotNet = Find-DotNet
+if (Test-DotNet9Sdk $script:DotNet) {
+    Write-Ok ".NET 9 SDK found: $($script:DotNet)"
+}
+else {
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        try {
+            Write-Host '  Installing .NET 9 SDK via winget...'
+            winget install --id Microsoft.DotNet.SDK.9 -e --silent `
+                --accept-source-agreements --accept-package-agreements
+        } catch { }
+    }
+
+    $script:DotNet = Find-DotNet
+    if (-not (Test-DotNet9Sdk $script:DotNet)) {
+        Write-Host '  Installing .NET 9 SDK via the official dotnet-install script...'
+        $di = Join-Path $env:TEMP 'dotnet-install.ps1'
+        Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $di -UseBasicParsing
+        $dotnetDir = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet'
+        # No -Runtime parameter: installs the full SDK (required to build).
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $di `
+            -Channel 9.0 -InstallDir $dotnetDir -NoPath
+        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        if ($userPath -notlike "*$dotnetDir*") {
+            [Environment]::SetEnvironmentVariable('Path', "$userPath;$dotnetDir", 'User')
+        }
+        $script:DotNet = Find-DotNet
+    }
+
+    if (Test-DotNet9Sdk $script:DotNet) { Write-Ok '.NET 9 SDK installed.' }
+    else { throw '.NET 9 SDK is required to build SETBoard. Install it from https://dotnet.microsoft.com/download/dotnet/9.0 and re-run.' }
 }
 
-Move-Item $tmp $ExePath -Force
+# ------------------------------------------------------------- Stop running app
+$running = Get-Process SETBoard -ErrorAction SilentlyContinue
+if ($running) {
+    Write-Step 'Stopping the running SETBoard'
+    # Signal the watchdog not to restart the app, then stop both processes.
+    try {
+        $allowExit = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::ManualReset, 'SETBoard.AllowExit')
+        $allowExit.Set()
+        $allowExit.Dispose()
+    } catch { }
+    $running | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    Get-Process SETBoard -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Write-Ok 'SETBoard stopped.'
+}
+
+# ------------------------------------------------------------- Download source
+Write-Step 'Downloading the source code'
+New-Item -ItemType Directory -Force -Path $Work | Out-Null
+Add-Type -AssemblyName System.Net.Http
+
+# Gitee first (faster in CN), GitHub as fallback.
+$sources = @(
+    "https://gitee.com/$GiteeRepo/repository/archive/master.zip",
+    "https://gitee.com/$GiteeRepo/repository/archive/main.zip",
+    "https://github.com/$GitHubRepo/archive/refs/heads/main.zip",
+    "https://github.com/$GitHubRepo/archive/refs/heads/master.zip"
+)
+
+$zip = Join-Path $Work 'src.zip'
+$downloaded = $false
+foreach ($url in $sources) {
+    try {
+        if (Save-File $url $zip 'Downloading SETBoard source') {
+            if ((Get-Item $zip).Length -gt 100KB) { $downloaded = $true; break }
+        }
+    }
+    catch { Write-Warn 'Source failed, trying the next mirror...' }
+}
+if (-not $downloaded) {
+    throw "Source download failed. Check the Gitee path ($GiteeRepo) or download https://github.com/$GitHubRepo manually."
+}
+Write-Ok 'Source downloaded.'
+
+# ------------------------------------------------------------- Build
+Write-Step 'Building SETBoard (dotnet publish, may take a few minutes)'
+Expand-Archive -Path $zip -DestinationPath $Work -Force
+$src = Get-ChildItem $Work -Directory |
+    Where-Object { Test-Path (Join-Path $_.FullName 'SETBoard.csproj') } |
+    Select-Object -First 1
+if (-not $src) { throw 'SETBoard.csproj not found in the downloaded archive.' }
+
+Push-Location $src.FullName
+try {
+    & $script:DotNet publish SETBoard.csproj `
+        -c Release -r win-x64 --self-contained true `
+        -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:DebugType=none `
+        -o publish
+    $buildCode = $LASTEXITCODE
+}
+finally { Pop-Location }
+if ($buildCode -ne 0) { throw "dotnet publish failed with exit code $buildCode." }
+
+$publish = Join-Path $src.FullName 'publish'
+if (-not (Test-Path (Join-Path $publish 'SETBoard.exe'))) { throw 'Build output SETBoard.exe not found.' }
+Write-Ok 'Build succeeded.'
+
+# ------------------------------------------------------------- Install
+Write-Step 'Installing'
+New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+Copy-Item (Join-Path $publish '*') $InstallDir -Recurse -Force
 Write-Ok "Installed to $ExePath"
 
-# ---------------------------------------------------------------- Shortcuts
+# ------------------------------------------------------------- Shortcuts
 function New-Shortcut($path, $target, $arguments, $workdir) {
     $ws = New-Object -ComObject WScript.Shell
     $sc = $ws.CreateShortcut($path)
@@ -161,7 +214,8 @@ New-Shortcut (Join-Path $startup 'SETBoard.lnk') $ExePath '--float' $InstallDir
 Write-Ok 'Auto-start enabled: floating bar on sign-in (--float).'
 Write-Host '  Remove the SETBoard shortcut from shell:startup to disable auto-start.'
 
-# ---------------------------------------------------------------- Launch
+# ------------------------------------------------------------- Launch & cleanup
 Write-Step 'Done'
 Start-Process $ExePath
+Remove-Item $Work -Recurse -Force -ErrorAction SilentlyContinue
 Write-Ok 'SETBoard launched. Enjoy your class!'

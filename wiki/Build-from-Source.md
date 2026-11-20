@@ -37,15 +37,9 @@ dotnet publish SETBoard.csproj `
 - 触发：push 到 `main` / `master`，或手动运行
 - windows-latest → 写入版本号 `1.0.<run_number>` → 发布单文件 → 打 zip → 创建 GitHub Release（附 exe + zip）
 
-### Gitee Go（`.workflow/build.yml`）
-
-- 触发：push 到 `master` / `main`
-- Linux 构建机交叉发布 win-x64（自动安装 .NET 9 SDK）→ 打 zip → 输出制品路径
-- 版本号 `1.0.<提交数>`；在流水线「制品管理」添加 `publish/SETBoard.exe` 与 `SETBoard-v*-win-x64.zip` 收集产物
-- 若构建机交叉 R2R 报错，publish 追加 `-p:PublishReadyToRun=false`
-
 ## 官网与安装脚本
 
 - `Page/` 目录即 GitHub Pages 站点（https://rejtech.github.io/SETBoard/）
-- `Page/install.ps1` / `Page/uninstall.ps1`：一键安装 / 卸载脚本，输出统一英文（避免 PowerShell 5.1 管道中文乱码）
+- `Page/install.ps1`：一键安装脚本——安装 .NET 9 SDK → 下载源码 zip（Gitee 优先，GitHub 回退）→ 本地 `dotnet publish` 构建 → 创建快捷方式与自启
+- `Page/uninstall.ps1`：一键卸载脚本，输出统一英文（避免 PowerShell 5.1 管道中文乱码）
 - 发布安装脚本更新后无需发版，Pages 更新即生效

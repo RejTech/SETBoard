@@ -8,16 +8,19 @@
 irm https://rejtech.github.io/SETBoard/install.ps1 | iex
 ```
 
-脚本会自动完成：
+脚本会自动完成（**从源码构建**）：
 
-1. 检测并安装 **.NET 9 运行时**（优先 winget，失败则用官方安装脚本，均无需手动干预）
-2. 从 GitHub Releases 获取**最新版** SETBoard（gh-proxy → ghfast → 直连，自动切换加速源，带下载进度条）
-3. 安装到 `%LOCALAPPDATA%\SETBoard`
-4. 创建**桌面快捷方式**（浮窗模式 `--float`）
-5. 在**启动文件夹**创建快捷方式，实现开机浮窗自启
-6. 启动 SETBoard（浮窗态）
+1. 检测并安装 **.NET 9 SDK**（优先 winget，失败则用官方安装脚本）
+2. 下载**源码 zip**：优先 Gitee 镜像，失败自动回退 GitHub（main → master），带下载进度条
+3. `dotnet publish` 本地构建 win-x64 单文件 exe（需几分钟）
+4. 安装到 `%LOCALAPPDATA%\SETBoard`
+5. 创建**桌面快捷方式**（浮窗模式 `--float`）
+6. 在**启动文件夹**创建快捷方式，实现开机浮窗自启
+7. 启动 SETBoard（浮窗态）
 
 > 全程无需管理员权限；若 .NET 安装环节请求管理员授权，允许即可。
+> 已运行的 SETBoard 会先被安全停止（含守护进程），装完自动启动。
+> Gitee 镜像为 [gitee.com/rejstudios/SETBoard](https://gitee.com/rejstudios/SETBoard)，不可用时自动回退 GitHub。
 
 ## 手动安装
 
