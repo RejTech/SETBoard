@@ -34,6 +34,62 @@ function Test-DotNet9Sdk($exe) {
     return [bool]($sdks | Where-Object { $_ -match '^9\.' })
 }
 
+function Get-LatestVersion {
+    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+    # 1) github.com /releases/latest redirect — accurate, no api.github.com.
+    # (gh-proxy/jsDelivr do NOT proxy release pages or the API: verified 403/timeout.)
+    $client = $null
+    try {
+        $handler = New-Object System.Net.Http.HttpClientHandler
+        $handler.AllowAutoRedirect = $false
+        $client = New-Object System.Net.Http.HttpClient($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds(15)
+        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
+        $r = $client.GetAsync("https://github.com/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
+        $loc = $r.Headers.Location
+        if ($loc -and $loc.ToString() -match '/releases/tag/([^/]+)') {
+            return ($Matches[1] -replace '^[vV]', '')
+        }
+    }
+    catch { }
+    finally { if ($client) { $client.Dispose() } }
+
+    # 2) Official API.
+    $client = $null
+    try {
+        $client = New-Object System.Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromSeconds(15)
+        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
+        $json = $client.GetStringAsync("https://api.github.com/repos/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
+        $release = $json | ConvertFrom-Json
+        if ($release.tag_name) { return ($release.tag_name -replace '^[vV]', '') }
+    }
+    catch { }
+    finally { if ($client) { $client.Dispose() } }
+
+    # 3) Gitee mirror tags — reachable in China; may lag behind GitHub.
+    $client = $null
+    try {
+        $client = New-Object System.Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromSeconds(15)
+        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
+        $json = $client.GetStringAsync("https://gitee.com/api/v5/repos/$GiteeRepo/tags").GetAwaiter().GetResult()
+        $tags = $json | ConvertFrom-Json
+        $latest = $tags |
+            Where-Object { $_.name -match '^v?\d+\.\d+\.\d+$' } |
+            ForEach-Object { [PSCustomObject]@{ Name = $_.name; Ver = [version]($_.name -replace '^v', '') } } |
+            Sort-Object Ver -Descending | Select-Object -First 1
+        if ($latest) {
+            Write-Warn 'Using a Gitee mirror tag; it may lag behind GitHub.'
+            return ($latest.Name -replace '^[vV]', '')
+        }
+    }
+    catch { }
+    finally { if ($client) { $client.Dispose() } }
+
+    return $null
+}
+
 function Save-File($url, $path, $activity) {
     $client = $null
     try {
@@ -150,18 +206,8 @@ try {
 
     # Match the latest Release version so the app does not offer the same
     # update again after restarting.
-    $version = $null
-    $versionClient = $null
-    try {
-        $versionClient = New-Object System.Net.Http.HttpClient
-        $versionClient.Timeout = [TimeSpan]::FromSeconds(30)
-        $versionClient.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard-updater')
-        $json = $versionClient.GetStringAsync("https://api.github.com/repos/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
-        $release = $json | ConvertFrom-Json
-        $version = ($release.tag_name -replace '^[vV]', '')
-    }
-    catch { Write-Warn 'Could not read the latest release version; keeping the repository version.json.' }
-    finally { if ($versionClient) { $versionClient.Dispose() } }
+    $version = Get-LatestVersion
+    if (-not $version) { Write-Warn 'Could not resolve the release version; keeping the repository version.json.' }
 
     if ($version) {
         Write-Ok "Build version: $version"

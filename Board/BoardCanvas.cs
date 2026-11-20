@@ -63,6 +63,9 @@ public sealed partial class BoardCanvas : Control
     public uint InkColor { get; private set; } = 0xFFFFFFFF;
     public double InkWidth { get; private set; } = 4;
     public double Zoom => _zoom;
+
+    /// <summary>PPT 模式：锁定视图，禁止滚轮 / 双指手势缩放和平移。</summary>
+    public bool ZoomLocked { get; set; }
     public bool ShowGrid => _document.ShowGrid;
 
     /// <summary>橡皮半径（屏幕像素），指示圈与实际擦除范围同步。</summary>
@@ -126,6 +129,19 @@ public sealed partial class BoardCanvas : Control
     }
 
     public void PreviousPage() => GoToPage(PageNumber - 1);
+
+    /// <summary>PPT 模式：跳转到与幻灯片页码对应的批注页，不足则补空白页。
+    /// 每页笔迹独立保留，回到同一页时原笔迹恢复显示。</summary>
+    public void GoToSlidePage(int slideNumber)
+    {
+        if (slideNumber < 1) return;
+        CancelActiveInteraction();
+        while (_document.Pages.Count < slideNumber)
+        {
+            _document.Pages.Add(new BoardPage());
+        }
+        GoToPage(slideNumber);
+    }
 
     public void NextPage() => GoToPage(PageNumber + 1);
 
@@ -272,6 +288,7 @@ public sealed partial class BoardCanvas : Control
 
     public void ZoomBy(double factor, Point? anchor = null)
     {
+        if (ZoomLocked) return;
         _viewAnimationToken++;
         var screenAnchor = anchor ?? new Point(Bounds.Width / 2, Bounds.Height / 2);
         var worldAnchor = ToWorld(screenAnchor);

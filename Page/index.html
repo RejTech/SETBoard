@@ -159,6 +159,44 @@
   }
   .qi-copy:hover{border-color:var(--accent);color:var(--accent)}
   .quick-install-note{margin:10px 0 0;font-size:12px;color:var(--dim);line-height:1.7}
+  .quick-install-note a{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+  .quick-install-note a:hover{color:var(--accent)}
+
+  /* 一键安装引导弹层 */
+  .install-guide{
+    position:fixed;inset:0;z-index:60;display:none;
+    align-items:center;justify-content:center;padding:24px;
+    background:rgba(4,12,17,.72);backdrop-filter:blur(6px);
+  }
+  .install-guide.open{display:flex}
+  .guide-card{
+    width:min(520px,100%);border:1px solid var(--line);border-radius:18px;
+    background:var(--surface);padding:28px 28px 24px;
+    box-shadow:0 30px 80px rgba(0,0,0,.5);
+  }
+  .guide-card h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
+  .guide-card .guide-sub{margin:0 0 18px;font-size:13px;color:var(--muted);line-height:1.7}
+  .guide-steps{margin:0;padding:0;list-style:none;counter-reset:step}
+  .guide-steps li{
+    counter-increment:step;position:relative;padding:10px 0 10px 40px;
+    font-size:13.5px;color:var(--muted);line-height:1.7;
+  }
+  .guide-steps li::before{
+    content:counter(step);position:absolute;left:0;top:12px;
+    width:24px;height:24px;border-radius:50%;background:rgba(255,213,74,.14);
+    color:var(--accent);font-size:12px;display:flex;align-items:center;justify-content:center;
+    font-family:ui-monospace,Consolas,monospace;
+  }
+  .guide-steps code{
+    background:#0B1A23;border:1px solid rgba(255,255,255,.08);border-radius:5px;
+    padding:1px 6px;font-size:12px;color:#FFE9A8;
+  }
+  .guide-cmd{
+    margin:14px 0 18px;padding:11px 13px;font-size:12.5px;color:#FFE9A8;
+    background:#0B1A23;border:1px solid rgba(255,255,255,.07);border-radius:9px;
+    overflow-x:auto;white-space:nowrap;
+  }
+  .guide-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 
   /* 板面 */
   .hero-visual{
@@ -347,10 +385,10 @@
     <div class="hero-copy">
       <p class="eyebrow mono">Windows · 触屏教学白板</p>
       <h1>把黑板<br>装进<em>触摸屏</em></h1>
-      <p class="lede">为电子白板与触控一体机而写：落笔即刻出墨，压感带出笔锋；函数、三维几何、图片与桌面批注都留在同一套简洁工具里。</p>
+      <p class="lede">为电子白板与触控一体机而写：落笔即刻出墨，压感带出笔锋；函数、三维几何、图片与桌面批注都留在同一套简洁工具里。PPT 放映时自动进入批注，笔迹跟着幻灯片一起翻页。</p>
       <div class="actions">
-        <a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/releases/latest">下载 Windows 版</a>
-        <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">查看源码</a>
+        <button class="btn btn-primary" type="button" data-install>一键安装</button>
+        <a class="btn btn-line" href="install.ps1" download="install.ps1">下载安装脚本</a>
         <button class="btn btn-replay" type="button" id="replayHero" aria-label="重播首屏动画">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M13.6 8a5.6 5.6 0 1 1-1.95-4.27" />
@@ -367,7 +405,7 @@
           <code class="mono" id="installCmd">irm https://rejtech.github.io/SETBoard/install.ps1 | iex</code>
           <button class="qi-copy" type="button" id="copyInstall">复制</button>
         </div>
-        <p class="quick-install-note">在 PowerShell 中粘贴运行：自动安装 .NET 9、获取最新版 SETBoard、创建桌面快捷方式，并开启浮窗态开机自启。</p>
+        <p class="quick-install-note">在 PowerShell 中粘贴运行：自动安装 .NET 9 SDK，优先从 Gitee 下载源码并本地构建，创建桌面快捷方式与浮窗态开机自启。也可以 <a href="install.ps1" download="install.ps1">下载 install.ps1</a>，右键「使用 PowerShell 运行」。</p>
       </div>
     </div>
 
@@ -552,12 +590,17 @@
         <div class="row" data-reveal>
           <span class="no mono">02</span>
           <h3>桌面批注</h3>
-          <p>最小化后保留浮动入口，点开即进入全屏透明批注层；批注工具栏同样提供画笔、荧光笔、橡皮、选择、填色、五种形状、十色与自定义色。</p>
+          <p>最小化后保留浮动入口，点开即进入全屏透明批注层；图标化工具栏与二级面板和白板一致。选中「穿透」工具即可直接操作下层窗口，笔迹始终保留，再选其他工具立即恢复书写。</p>
         </div>
         <div class="row" data-reveal>
           <span class="no mono">03</span>
           <h3>分页与导出</h3>
-          <p>一节课多页白板，支持撤销重做；整页导出 PNG，或存成 .setb 文件下次继续。橡皮菜单可滑动清页，误操作仍能撤销。</p>
+          <p>一节课多页白板，支持撤销重做；整页导出 PNG，或存成 .setb 文件下次继续。橡皮菜单可滑动清页，误操作仍能撤销；底栏「清空」一键重置全部页面，带确认防误触。</p>
+        </div>
+        <div class="row" data-reveal>
+          <span class="no mono">04</span>
+          <h3>PPT 模式</h3>
+          <p>检测到 PowerPoint / WPS 放映，自动收起白板进入批注并穿透；翻页时笔迹按页保存、回页恢复，下一页是全新笔迹层。屏幕两角各有圆形翻页浮钮，书写、翻页、结束放映都不用离开讲台。</p>
         </div>
       </div>
     </div>
@@ -577,11 +620,13 @@
           <div><dt>输入通道</dt><dd>Win32 WM_POINTER · WM_TOUCH 直读</dd></div>
         </dl>
         <dl data-reveal>
-          <div><dt>基础工具</dt><dd>移动 · 书写 · 荧光 · 橡皮 · 选择 · 填色</dd></div>
+          <div><dt>基础工具</dt><dd>移动 · 书写 · 荧光 · 橡皮 · 选择 · 填色 · 穿透</dd></div>
           <div><dt>插入</dt><dd>5 种形状 · 函数 · 6 种三维体 · 图片</dd></div>
           <div><dt>颜色 / 粗细</dt><dd>10 色快捷板 + 自定义色 · 1–16 级</dd></div>
           <div><dt>对象操作</dt><dd>移动 · 等比缩放 · 三维旋转 · 单面填色</dd></div>
           <div><dt>数学功能</dt><dd>LaTeX · 多曲线 · 5 类预设 · 交点坐标</dd></div>
+          <div><dt>PPT 联动</dt><dd>放映自动批注 · 笔迹随页 · 双角翻页浮钮</dd></div>
+          <div><dt>常驻与更新</dt><dd>单实例 · 进程互守 · 脚本化自动更新</dd></div>
           <div><dt>文件 / 发布</dt><dd>.setb · PNG · Windows 单文件绿色版</dd></div>
         </dl>
       </div>
@@ -608,7 +653,8 @@
     <p class="kicker mono" data-reveal>Download</p>
     <h2 data-reveal>下一节课，<br>换一块好写的板子</h2>
     <div class="actions" data-reveal>
-      <a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/releases/latest">下载 Windows 版</a>
+      <button class="btn btn-primary" type="button" data-install>一键安装</button>
+      <a class="btn btn-line" href="install.ps1" download="install.ps1">下载安装脚本</a>
       <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">GitHub 仓库</a>
     </div>
   </section>
@@ -618,6 +664,25 @@
   <span>© <span class="mono">2026</span> Swift Education Technology · 迅教科技</span>
   <span><a href="https://github.com/RejTech/SETBoard/blob/main/LICENSE">GPL-3.0-only</a> · <span class="mono">SETBoard · 教学白板</span></span>
 </footer>
+
+<!-- 一键安装引导：命令已复制，引导用户在 PowerShell 中运行 -->
+<div class="install-guide" id="installGuide" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+  <div class="guide-card">
+    <h3 id="guideTitle">安装命令已复制</h3>
+    <p class="guide-sub">还差一步：在 PowerShell 里粘贴运行，脚本会自动完成安装。</p>
+    <ol class="guide-steps">
+      <li>按 <code>Win + R</code>，输入 <code>powershell</code> 后回车</li>
+      <li>在蓝色窗口中按 <code>Ctrl + V</code> 粘贴，再按回车</li>
+      <li>等待自动安装 .NET 9 SDK、下载源码并构建，完成后自动启动 SETBoard</li>
+    </ol>
+    <div class="guide-cmd mono" id="guideCmd">irm https://rejtech.github.io/SETBoard/install.ps1 | iex</div>
+    <div class="guide-actions">
+      <button class="btn btn-primary" type="button" id="guideDone">我已运行</button>
+      <a class="btn btn-line" href="install.ps1" download="install.ps1">改用下载 install.ps1</a>
+      <button class="btn btn-replay" type="button" id="guideClose">关闭</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -673,21 +738,59 @@
     stroke.style.strokeDashoffset = "0";
     stroke.style.strokeWidth = "18";
   }
-  // 一键安装命令复制
-  const copyBtn = document.getElementById("copyInstall");
-  if (copyBtn) {
-    copyBtn.addEventListener("click", async () => {
-      const text = document.getElementById("installCmd").textContent.trim();
+  // 一键安装：复制命令 → 弹出 PowerShell 运行引导；剪贴板不可用时降级为下载 ps1
+  const INSTALL_CMD = "irm https://rejtech.github.io/SETBoard/install.ps1 | iex";
+  const guide = document.getElementById("installGuide");
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
       try {
-        await navigator.clipboard.writeText(text);
-      } catch {
         const ta = document.createElement("textarea");
         ta.value = text;
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand("copy");
+        const ok = document.execCommand("copy");
         ta.remove();
+        return ok;
+      } catch {
+        return false;
       }
+    }
+  }
+
+  function downloadPs1() {
+    const a = document.createElement("a");
+    a.href = "install.ps1";
+    a.download = "install.ps1";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function closeGuide() { guide.classList.remove("open"); }
+
+  document.querySelectorAll("[data-install]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (await copyText(INSTALL_CMD)) {
+        guide.classList.add("open");
+      } else {
+        downloadPs1();
+      }
+    });
+  });
+  document.getElementById("guideDone").addEventListener("click", closeGuide);
+  document.getElementById("guideClose").addEventListener("click", closeGuide);
+  guide.addEventListener("click", (e) => { if (e.target === guide) closeGuide(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGuide(); });
+
+  // 一键安装命令复制
+  const copyBtn = document.getElementById("copyInstall");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      await copyText(INSTALL_CMD);
       copyBtn.textContent = "已复制";
       setTimeout(() => { copyBtn.textContent = "复制"; }, 1600);
     });

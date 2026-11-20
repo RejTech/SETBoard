@@ -9,7 +9,7 @@
 |------|------|
 | [[Installation]] | 一键安装、手动安装、开机自启、卸载 |
 | [[Whiteboard]] | 白板主界面：工具、页面、视图、文件 |
-| [[Desktop-Annotation]] | 桌面批注、悬浮窗、进程守护 |
+| [[Desktop-Annotation]] | 桌面批注、穿透工具、PPT 模式、进程守护 |
 | [[Shortcuts]] | 全部快捷键 |
 | [[Auto-Update]] | 自动更新机制与镜像加速 |
 | [[FAQ]] | 常见问题与排查 |
@@ -31,8 +31,9 @@ irm https://rejtech.github.io/SETBoard/install.ps1 | iex
 ## 系统要求
 
 - Windows 10 / 11（64 位）
-- 安装脚本会自动安装 .NET 9 运行时，无需手动准备
+- 安装脚本自动安装 .NET 9 SDK，并从源码构建最新 Release，无需手动准备
 - 触屏、电磁笔、鼠标均可使用
+- PPT 模式需要本机安装 PowerPoint 或 WPS 演示
 
 ## 项目链接
 

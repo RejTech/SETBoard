@@ -351,6 +351,13 @@
             </StackPanel>
           </Button>
 
+          <Button Classes="tool" Click="OnClearAllClick">
+            <StackPanel>
+              <TextBlock Classes="icon" Text="&#xE74D;" />
+              <TextBlock Classes="label" Text="清空" />
+            </StackPanel>
+          </Button>
+
           <Button x:Name="MenuButton" Classes="tool">
             <StackPanel>
               <TextBlock Classes="icon" Text="&#xE700;" />
@@ -365,6 +372,7 @@
                 <MenuItem Header="适应内容 (Ctrl+1)" Click="OnFitClick" />
                 <MenuItem Header="重置视图 (Ctrl+0)" Click="OnZoomResetClick" />
                 <MenuItem x:Name="GridMenuItem" Header="显示点阵" ToggleType="CheckBox" Click="OnGridMenuClick" />
+                <MenuItem x:Name="PptModeMenuItem" Header="PPT 模式（放映时自动批注）" ToggleType="CheckBox" IsChecked="True" Click="OnPptModeClick" />
                 <MenuItem Header="全屏 (F11)" Click="OnFullScreenClick" />
                 <Separator />
                 <MenuItem x:Name="DeletePageMenuItem" Header="删除本页…" Click="OnDeletePageClick" />

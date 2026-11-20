@@ -109,6 +109,8 @@ public partial class MainWindow : Window
         ClearPageSlider.AddHandler(PointerReleasedEvent, OnClearSlideReleased, RoutingStrategies.Bubble, true);
         EraserSizeSlider.ValueChanged += (_, e) => Board.SetEraserSize(e.NewValue);
 
+        EnsurePptWatcher(); // PPT 模式：轮询 PowerPoint / WPS 放映状态
+
         // 点击工具条以外的地方（画布、其他按钮、菜单等）收起二级选项菜单
         AddHandler(PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel, true);
 
@@ -876,6 +878,20 @@ public partial class MainWindow : Window
 
     private void OnMinimizeClick(object? sender, RoutedEventArgs e) => MinimizeToDesktop();
 
+    /// <summary>清空所有页面与未保存内容，恢复为全新白板（需确认，不可撤销）。</summary>
+    private async void OnClearAllClick(object? sender, RoutedEventArgs e)
+    {
+        if (!await ConfirmAsync("清空所有页面？", "将删除全部页面和未保存的内容，且无法撤销。", "全部清空")) return;
+
+        Board.SetDocument(new BoardDocument());
+        Board.ResetView();
+        _dirty = false; // SetDocument 会触发 MarkDirty，这里覆盖为全新未修改状态
+        UpdateTitle();
+        UpdatePageLabel();
+        UpdateGridMenu();
+        ShowToast("已清空所有页面");
+    }
+
     private DesktopInkBar? _inkBar;
     private DesktopAnnotationWindow? _annotation;
 
@@ -908,21 +924,62 @@ public partial class MainWindow : Window
     private DesktopInkBar CreateInkBar()
     {
         var bar = new DesktopInkBar();
-        bar.AnnotateRequested += (_, _) =>
-        {
-            bar.Hide();
-            _annotation?.Close();
-            _annotation = new DesktopAnnotationWindow();
-            _annotation.Closed += (_, _) =>
-            {
-                _annotation = null;
-                if (!IsVisible) bar.ShowAtDesktopCorner();
-            };
-            _annotation.Show();
-            _annotation.Activate();
-        };
+        bar.AnnotateRequested += (_, _) => OpenAnnotation();
         bar.RestoreRequested += (_, _) => RestoreMainWindow();
         return bar;
+    }
+
+    /// <summary>打开全屏桌面批注层（浮窗「批注」与 PPT 模式共用）。</summary>
+    private void OpenAnnotation()
+    {
+        _inkBar?.Hide();
+        _annotation?.Close();
+        _annotation = new DesktopAnnotationWindow();
+        _annotation.Closed += (_, _) =>
+        {
+            _annotation = null;
+            if (!IsVisible) _inkBar?.ShowAtDesktopCorner();
+        };
+        _annotation.Show();
+        _annotation.Activate();
+    }
+
+    // ── PPT 模式：跟随 PowerPoint / WPS 放映 ─────────────
+    private PptWatcher? _pptWatcher;
+    private bool _pptModeEnabled = true;
+
+    private void EnsurePptWatcher()
+    {
+        if (_pptWatcher is not null) return;
+
+        _pptWatcher = new PptWatcher();
+        _pptWatcher.SlideShowStarted += (_, slide) =>
+        {
+            if (!_pptModeEnabled) return;
+            if (IsVisible) MinimizeToDesktop(); // 主界面让位给放映
+            OpenAnnotation();
+            _annotation?.SetPptMode(true); // 锁缩放 + 两侧翻页按钮
+            _annotation?.SetPassThrough(true); // 先穿透，方便直接操作 PPT
+            _annotation?.SyncToSlide(slide);
+        };
+        _pptWatcher.SlideChanged += (_, slide) =>
+        {
+            if (_pptModeEnabled) _annotation?.SyncToSlide(slide);
+        };
+        _pptWatcher.SlideShowEnded += (_, _) =>
+        {
+            _annotation?.SetPptMode(false);
+            _annotation?.SetPassThrough(false);
+        };
+        _pptWatcher.Start();
+    }
+
+    private void OnPptModeClick(object? sender, RoutedEventArgs e)
+    {
+        _pptModeEnabled = !_pptModeEnabled;
+        if (sender is MenuItem item) item.IsChecked = _pptModeEnabled;
+        if (!_pptModeEnabled) _annotation?.SetPassThrough(false);
+        ShowToast(_pptModeEnabled ? "PPT 模式已开启：放映时自动进入批注" : "PPT 模式已关闭");
     }
 
     private void OnFullScreenClick(object? sender, RoutedEventArgs e) => ToggleFullScreen();
@@ -1019,6 +1076,37 @@ public partial class MainWindow : Window
             }
         };
         panel.Children.Add(checkUpdateBtn);
+
+        var uninstallBtn = CreateDialogButton("卸载", "#33424E", "#FF9B9B");
+        var uninstallStatus = new TextBlock
+        {
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.Parse("#9FB4C1")),
+            IsVisible = false,
+        };
+        uninstallBtn.Click += async (_, _) =>
+        {
+            if (!await ConfirmAsync(
+                    "卸载 SETBoard？",
+                    "将删除程序、桌面快捷方式和开机自启，未保存的白板内容会丢失；已保存的 .setb 文件会保留。",
+                    "卸载",
+                    dialog)) return;
+
+            uninstallBtn.IsEnabled = checkUpdateBtn.IsEnabled = false;
+            uninstallBtn.Content = "正在准备卸载…";
+            uninstallStatus.IsVisible = true;
+
+            bool success = await AutoUpdater.DownloadAndUninstallAsync(
+                s => Dispatcher.UIThread.Post(() => uninstallStatus.Text = s));
+            if (!success)
+            {
+                uninstallBtn.IsEnabled = checkUpdateBtn.IsEnabled = true;
+                uninstallBtn.Content = "卸载";
+            }
+        };
+        panel.Children.Add(uninstallBtn);
+        panel.Children.Add(uninstallStatus);
 
         var closeBtn = CreateDialogButton("关闭");
         closeBtn.Click += (_, _) => dialog.Close();
@@ -1249,7 +1337,7 @@ public partial class MainWindow : Window
         _toastTimer.Start();
     }
 
-    private async Task<bool> ConfirmAsync(string title, string message, string confirmText)
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText, Window? owner = null)
     {
         var dialog = new Window();
         SetupDialog(dialog, title);
@@ -1298,7 +1386,7 @@ public partial class MainWindow : Window
         dialog.Content = panel;
         dialog.KeyDown += (_, args) => { if (args.Key == Key.Escape) dialog.Close(false); };
         WindowFx.FadeIn(dialog, 160);
-        return await dialog.ShowDialog<bool>(this);
+        return await dialog.ShowDialog<bool>(owner ?? this);
     }
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)

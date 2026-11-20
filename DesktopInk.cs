@@ -5,8 +5,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using System.Runtime.InteropServices;
 using SETBoard.Board;
 
 namespace SETBoard;
@@ -87,7 +89,15 @@ internal sealed class DesktopAnnotationWindow : Window
     private readonly StackPanel _inkRow;
     private readonly StackPanel _eraserRow;
     private readonly Button _shapeToggle;
+    private readonly Button _passThroughButton;
     private RawPointerInput? _rawInput;
+    private bool _passThrough;
+    private BoardTool _currentTool = BoardTool.Pen;
+    private Window? _barWindow; // 独立工具栏窗口：画布穿透时它仍可交互
+    private bool _pptMode;
+    private int _slidePage = 1; // 当前幻灯片页码，翻页按钮先按它推算目标页
+    private readonly Window _prevNavWindow;
+    private readonly Window _nextNavWindow;
 
     private static readonly (BoardTool Tool, string Tip, string Data)[] ShapeItems =
     {
@@ -136,6 +146,12 @@ internal sealed class DesktopAnnotationWindow : Window
         };
 
         var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        // 穿透工具：选中即穿透（笔迹保留、可点下层），选其他工具自动退出
+        _passThroughButton = InkUi.CreateIconButton(
+            "\uE962", "穿透", () => SetPassThrough(!_passThrough));
+        tools.Children.Add(_passThroughButton);
+        tools.Children.Add(InkUi.CreateDivider());
+
         AddTool(tools, "\uE70F", "画笔", BoardTool.Pen);
         AddTool(tools, "\uE7E6", "荧光笔", BoardTool.Highlighter);
         AddTool(tools, "\uE75C", "橡皮", BoardTool.Eraser);
@@ -155,7 +171,11 @@ internal sealed class DesktopAnnotationWindow : Window
         tools.Children.Add(_undoButton);
         tools.Children.Add(_redoButton);
         tools.Children.Add(InkUi.CreateIconButton("\uE74D", "清除", _board.ClearBoard));
-        tools.Children.Add(InkUi.CreateIconButton("\uE7E8", "退出", Close));
+        tools.Children.Add(InkUi.CreateIconButton("\uE7E8", "退出", () =>
+        {
+            if (_pptMode) PptInterop.ExitSlideShow(); // 退出批注时自动结束放映
+            Close();
+        }));
 
         // 颜色 / 粗细 / 预览收进二级面板，与白板一致
         _inkRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
@@ -261,15 +281,48 @@ internal sealed class DesktopAnnotationWindow : Window
             },
         };
 
-        Content = new Panel
+        Content = _board;
+
+        // 工具栏独立窗口：不穿透，画布穿透时仍能选工具、翻页、退出
+        _barWindow = new Window
         {
-            Children = { _board, _hint },
+            SystemDecorations = SystemDecorations.None,
+            CanResize = false,
+            ShowInTaskbar = false,
+            Topmost = true,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Background = Brushes.Transparent,
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+            Content = _hint,
         };
+        UiaTopmost.MakeTopmost(_barWindow);
+        _barWindow.SizeChanged += (_, _) => LayoutBarWindow();
+        _barWindow.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) Close();
+        };
+
+        // 两角各放一组完整的翻页按钮（上一页 + 下一页），左撇子右撇子都顺手
+        _prevNavWindow = CreateNavWindow(CreateNavPair());
+        _nextNavWindow = CreateNavWindow(CreateNavPair());
+        _prevNavWindow.SizeChanged += (_, _) => LayoutNavWindows();
+        _nextNavWindow.SizeChanged += (_, _) => LayoutNavWindows();
+
+        // 与白板一致：点击画布任意处，自动收起颜色/粗细等二级面板
+        _board.AddHandler(PointerPressedEvent, (_, _) =>
+        {
+            if (_inkPanel.IsVisible) SetPanelVisible(_inkPanel, false);
+        }, Avalonia.Interactivity.RoutingStrategies.Bubble, true);
 
         // 底部工具栏区域不接收笔迹，避免笔迹从半透明面板下透出
         _hint.PropertyChanged += (_, e) =>
         {
-            if (e.Property == Visual.BoundsProperty) UpdateInkExclusions();
+            if (e.Property == Visual.BoundsProperty)
+            {
+                LayoutBarWindow();
+                UpdateInkExclusions();
+            }
         };
 
         KeyDown += (_, e) =>
@@ -324,6 +377,169 @@ internal sealed class DesktopAnnotationWindow : Window
 
     private void ToggleShapePanel() => SetShapePanelVisible(!_shapePanel.IsVisible);
 
+    /// <summary>PPT 模式：锁定缩放和平移，显示两侧翻页按钮。</summary>
+    public void SetPptMode(bool enabled)
+    {
+        _pptMode = enabled;
+        _board.ZoomLocked = enabled;
+        if (enabled) _board.ResetView(); // 笔迹与幻灯片保持屏幕对齐
+        UpdatePageNav();
+    }
+
+    private void UpdatePageNav()
+    {
+        // 翻页浮钮在屏幕两角，仅 PPT 模式显示；穿透时同样可点（独立窗口不穿透）
+        if (_pptMode)
+        {
+            foreach (var window in new[] { _prevNavWindow, _nextNavWindow })
+            {
+                if (window.IsVisible) continue;
+                window.Opacity = 0; // 淡入出现
+                window.Show();
+                window.Opacity = 1;
+            }
+            // Show 后窗口尚未完成测量，须等 Loaded 再定位，否则被系统默认层叠位置覆盖
+            Dispatcher.UIThread.Post(LayoutNavWindows, DispatcherPriority.Loaded);
+        }
+        else
+        {
+            _prevNavWindow.Hide();
+            _nextNavWindow.Hide();
+        }
+    }
+
+    /// <summary>一组翻页按钮：上一页 + 下一页，两个半透明圆形浮钮。</summary>
+    private StackPanel CreateNavPair()
+    {
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            Children =
+            {
+                CreatePageNavButton("", () => NavigateSlide(-1)),
+                CreatePageNavButton("", () => NavigateSlide(1)),
+            },
+        };
+    }
+
+    /// <summary>翻页按钮：先按方向立即切批注页（零等待），再控制 PPT 翻页并立即核对真实页码。</summary>
+    private void NavigateSlide(int delta)
+    {
+        _slidePage = Math.Max(1, _slidePage + delta);
+        _board.GoToSlidePage(_slidePage); // 立即切换，不等每秒轮询
+
+        if (delta > 0) PptInterop.NextSlide();
+        else PptInterop.PreviousSlide();
+
+        // COM 翻页是同步调用，立即核对；末页 / 首页等边界由这里与 watcher 共同校正
+        if (PptInterop.TryGetSlideShow(out int actual)) SyncToSlide(actual);
+    }
+
+    private static Window CreateNavWindow(Control content)
+    {
+        var window = new Window
+        {
+            SystemDecorations = SystemDecorations.None,
+            CanResize = false,
+            ShowInTaskbar = false,
+            Topmost = true,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Background = Brushes.Transparent,
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+            Content = content,
+            Transitions = new Transitions
+            {
+                new DoubleTransition { Property = TopLevel.OpacityProperty, Duration = TimeSpan.FromMilliseconds(160), Easing = new CubicEaseOut() },
+            },
+        };
+        UiaTopmost.MakeTopmost(window);
+        return window;
+    }
+
+    private void LayoutNavWindows()
+    {
+        var screen = Screens.Primary ?? Screens.All.FirstOrDefault();
+        if (screen is null) return;
+
+        var area = screen.Bounds;
+        double scale = screen.Scaling;
+        int margin = (int)(20 * scale);
+        int height = (int)(_prevNavWindow.Bounds.Height * scale);
+        int nextWidth = (int)(_nextNavWindow.Bounds.Width * scale);
+
+        _prevNavWindow.Position = new PixelPoint(area.X + margin, area.Y + area.Height - height - margin);
+        _nextNavWindow.Position = new PixelPoint(area.X + area.Width - nextWidth - margin, area.Y + area.Height - height - margin);
+    }
+
+    private static Button CreatePageNavButton(string glyph, Action action)
+    {
+        var button = new Button
+        {
+            Width = 44,
+            Height = 44,
+            Padding = new Thickness(0),
+            Background = new SolidColorBrush(Color.Parse("#991D2A34")), // 半透明圆形
+            BorderBrush = new SolidColorBrush(Color.Parse("#2E3D48")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(22),
+            Foreground = new SolidColorBrush(Color.Parse("#EAF3FA")),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Content = new TextBlock
+            {
+                Text = glyph,
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                FontSize = 18,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+            // 显隐由所在浮钮窗口控制，按钮自身始终可见
+        };
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    /// <summary>PPT 模式 / 工具按钮：穿透选中态切换。</summary>
+    public void SetPassThrough(bool enabled)
+    {
+        if (enabled == _passThrough) return;
+        if (enabled) EnterPassThrough();
+        else ExitPassThrough();
+    }
+
+    /// <summary>PPT 模式：批注页跟随幻灯片页码，原页笔迹保留，回页恢复。</summary>
+    public void SyncToSlide(int slideNumber)
+    {
+        if (slideNumber == _slidePage) return;
+        _slidePage = slideNumber;
+        _board.GoToSlidePage(slideNumber);
+    }
+
+    /// <summary>穿透模式：画布不再接收鼠标/触摸，笔迹保留，可点下层内容；工具栏独立窗口不受影响。</summary>
+    private void EnterPassThrough()
+    {
+        _passThrough = true;
+        // 穿透时自动收起所有二级菜单，保持工具栏简洁
+        SetPanelVisible(_inkPanel, false);
+        SetPanelVisible(_shapePanel, false);
+        // 与其他工具一样的选中态：穿透高亮，其余工具熄灭
+        foreach (var pair in _toolButtons) InkUi.SetActive(pair.Value, false);
+        InkUi.SetActive(_passThroughButton, true);
+        PassThroughNative.Set(this, true);
+    }
+
+    private void ExitPassThrough()
+    {
+        _passThrough = false;
+        InkUi.SetActive(_passThroughButton, false);
+        PassThroughNative.Set(this, false);
+        // 恢复当前工具的选中态
+        foreach (var pair in _toolButtons) InkUi.SetActive(pair.Value, pair.Key == _currentTool);
+    }
+
     private void SetShapePanelVisible(bool visible) => _shapePanel.IsVisible = visible;
 
     private void AddColor(Panel panel, string name, uint color)
@@ -340,6 +556,8 @@ internal sealed class DesktopAnnotationWindow : Window
 
     private void SetTool(BoardTool tool)
     {
+        if (_passThrough) ExitPassThrough(); // 选择其他工具即退出穿透
+        _currentTool = tool;
         _board.SetTool(tool);
         foreach (var pair in _toolButtons)
         {
@@ -356,8 +574,48 @@ internal sealed class DesktopAnnotationWindow : Window
         bool wantsInk = !isEraser && tool != BoardTool.Select;
         _inkRow.IsVisible = wantsInk;
         _eraserRow.IsVisible = isEraser;
-        _inkPanel.IsVisible = wantsInk || isEraser;
-        if (!wantsInk) _shapePanel.IsVisible = false;
+        SetPanelVisible(_inkPanel, wantsInk || isEraser);
+        if (!wantsInk) SetPanelVisible(_shapePanel, false);
+    }
+
+    private readonly Dictionary<Control, int> _panelTokens = new();
+
+    /// <summary>二级面板显隐：与白板一致的 190ms 淡入淡出 + 上浮动画。</summary>
+    private void SetPanelVisible(Control panel, bool show)
+    {
+        int token = _panelTokens.TryGetValue(panel, out int last) ? last + 1 : 1;
+        _panelTokens[panel] = token;
+
+        panel.Transitions ??= new Transitions
+        {
+            new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(190), Easing = new CubicEaseOut() },
+            new TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(190), Easing = new CubicEaseOut() },
+        };
+
+        if (show)
+        {
+            panel.RenderTransform = TransformOperations.Parse("translateY(8px)");
+            panel.Opacity = 0;
+            panel.IsVisible = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_panelTokens[panel] != token) return;
+                panel.Opacity = 1;
+                panel.RenderTransform = TransformOperations.Parse("translateY(0px)");
+            }, DispatcherPriority.Render);
+            return;
+        }
+
+        if (!panel.IsVisible) return;
+        panel.Opacity = 0;
+        panel.RenderTransform = TransformOperations.Parse("translateY(6px)");
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(190) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (_panelTokens[panel] == token) panel.IsVisible = false;
+        };
+        timer.Start();
     }
 
     private void UpdateColorButtons()
@@ -381,20 +639,42 @@ internal sealed class DesktopAnnotationWindow : Window
         _redoButton.IsEnabled = _board.History.CanRedo;
     }
 
-    /// <summary>把底部工具栏自身的矩形登记为笔迹禁区，两侧空白仍可书写。</summary>
+    /// <summary>把工具栏窗口的屏幕矩形登记为笔迹禁区，两侧空白仍可书写。</summary>
     private void UpdateInkExclusions()
     {
-        var topLeft = _hint.TranslatePoint(new Point(0, 0), _board);
-        if (topLeft is null) return;
-
-        var bounds = _hint.Bounds;
-        if (bounds.Width < 1 || bounds.Height < 1)
+        if (_barWindow is null || !_barWindow.IsVisible || _barWindow.ClientSize.Width < 1)
         {
             _board.SetInkExclusions(null);
             return;
         }
 
-        _board.SetInkExclusions(new[] { new Rect(topLeft.Value.X, topLeft.Value.Y, bounds.Width, bounds.Height) });
+        // 工具栏在独立窗口：屏幕像素坐标 → 本窗口 DIP → 画布坐标
+        double scale = RenderScaling;
+        if (scale < 0.01) scale = 1;
+        var topLeft = new Point(
+            (_barWindow.Position.X - Position.X) / scale,
+            (_barWindow.Position.Y - Position.Y) / scale);
+        var local = this.TranslatePoint(topLeft, _board);
+        if (local is null) return;
+
+        var size = _barWindow.ClientSize;
+        _board.SetInkExclusions(new[] { new Rect(local.Value.X, local.Value.Y, size.Width, size.Height) });
+    }
+
+    /// <summary>工具栏窗口在屏幕底部居中（尺寸随二级面板展开变化）。</summary>
+    private void LayoutBarWindow()
+    {
+        if (_barWindow is null) return;
+        var screen = Screens.Primary ?? Screens.All.FirstOrDefault();
+        if (screen is null) return;
+
+        // 用窗口自身缩放与实测尺寸，避免多屏 / DPI 下定位偏移
+        double scale = _barWindow.RenderScaling;
+        if (scale < 0.01) scale = 1;
+        var area = screen.Bounds;
+        _barWindow.Position = new PixelPoint(
+            area.X + (area.Width - (int)(_barWindow.ClientSize.Width * scale)) / 2,
+            area.Y + area.Height - (int)(_barWindow.ClientSize.Height * scale));
     }
 
     protected override void OnOpened(EventArgs e)
@@ -408,11 +688,20 @@ internal sealed class DesktopAnnotationWindow : Window
         Width = area.Width / screen.Scaling;
         Height = area.Height / screen.Scaling;
         _rawInput ??= RawPointerInput.Attach(this, OnRawPointerSample);
-        Dispatcher.UIThread.Post(UpdateInkExclusions, Avalonia.Threading.DispatcherPriority.Loaded);
+        _barWindow?.Show();
+        Dispatcher.UIThread.Post(() =>
+        {
+            LayoutBarWindow();
+            UpdateInkExclusions();
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        _barWindow?.Close();
+        _barWindow = null;
+        _prevNavWindow.Close();
+        _nextNavWindow.Close();
         _rawInput?.Dispose();
         _rawInput = null;
         base.OnClosed(e);
@@ -420,6 +709,8 @@ internal sealed class DesktopAnnotationWindow : Window
 
     private void OnRawPointerSample(RawPointerSample sample)
     {
+        if (_passThrough) return; // 穿透时不产生笔迹
+
         var local = this.TranslatePoint(sample.Position, _board);
         if (local is null) return;
 
@@ -435,6 +726,33 @@ internal sealed class DesktopAnnotationWindow : Window
                 _board.RawPointerUp(sample.ContactId, sample.IsPen);
                 break;
         }
+    }
+}
+
+/// <summary>Win32 扩展样式：WS_EX_TRANSPARENT 让窗口跳过命中测试，实现点击穿透。</summary>
+internal static class PassThroughNative
+{
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TRANSPARENT = 0x20;
+    private const int WS_EX_LAYERED = 0x80000;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowLong(IntPtr hWnd, int index);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr hWnd, int index, int value);
+
+    public static void Set(Window window, bool enabled)
+    {
+        var handle = window.TryGetPlatformHandle();
+        if (handle is null || handle.Handle == IntPtr.Zero) return;
+
+        int style = GetWindowLong(handle.Handle, GWL_EXSTYLE);
+        // LAYERED 保留（透明窗口本身需要）；仅切换 TRANSPARENT 位
+        int next = enabled
+            ? style | WS_EX_TRANSPARENT | WS_EX_LAYERED
+            : style & ~WS_EX_TRANSPARENT;
+        SetWindowLong(handle.Handle, GWL_EXSTYLE, next);
     }
 }
 
@@ -501,13 +819,21 @@ internal static class InkUi
             {
                 new BrushTransition { Property = Button.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(130) },
                 new BrushTransition { Property = Button.ForegroundProperty, Duration = TimeSpan.FromMilliseconds(130) },
+                new TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(110), Easing = new CubicEaseOut() },
             },
+            RenderTransformOrigin = RelativePoint.Center,
         };
-        ToolTip.SetTip(button, tip);
+        // 不设置 ToolTip：悬停提示会干扰触屏书写
         button.PointerEntered += (_, _) =>
             button.Background = new SolidColorBrush(Color.Parse("#33424E"));
         button.PointerExited += (_, _) =>
+        {
             button.Background = button.Classes.Contains("active") ? ActiveBrush : Brushes.Transparent;
+            button.RenderTransform = TransformOperations.Parse("scale(1)");
+        };
+        // 按压回弹：与白板按钮一致的触控反馈
+        button.PointerPressed += (_, _) => button.RenderTransform = TransformOperations.Parse("scale(0.92)");
+        button.PointerReleased += (_, _) => button.RenderTransform = TransformOperations.Parse("scale(1)");
         return button;
     }
 

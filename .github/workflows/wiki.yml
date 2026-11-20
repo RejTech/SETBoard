@@ -1,0 +1,55 @@
+name: Sync Wiki
+
+# wiki/ 目录变更时，自动推送到 GitHub Wiki 仓库（<repo>.wiki.git）。
+# 前置条件：在 GitHub 仓库的 Wiki 标签页手动创建过首页（初始化 wiki 仓库）一次。
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'wiki/**'
+      - '.github/workflows/wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Push wiki/ to the GitHub Wiki repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          WIKI_DIR="$RUNNER_TEMP/setboard-wiki"
+          WIKI_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+
+          if git clone "$WIKI_URL" "$WIKI_DIR"; then
+            echo "Cloned existing wiki repository"
+          else
+            echo "Wiki repository empty; initializing"
+            mkdir -p "$WIKI_DIR"
+            git -C "$WIKI_DIR" init
+            git -C "$WIKI_DIR" checkout -b master
+          fi
+
+          # 以仓库 wiki/ 为唯一来源，全量同步（含删除）
+          rsync -av --delete --exclude='.git' wiki/ "$WIKI_DIR/"
+
+          cd "$WIKI_DIR"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No wiki changes to publish"
+            exit 0
+          fi
+
+          git commit -m "docs: sync wiki from ${GITHUB_REPOSITORY}@${GITHUB_SHA:0:7}"
+          git push origin HEAD:master

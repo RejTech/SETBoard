@@ -25,6 +25,14 @@ internal static class AutoUpdater
         "https://raw.githubusercontent.com/RejTech/SETBoard/master/Page/Updater.ps1",
     };
 
+    private static readonly string[] UninstallScriptUrls =
+    {
+        "https://rejtech.github.io/SETBoard/uninstall.ps1",
+        "https://v4.gh-proxy.org/https://raw.githubusercontent.com/RejTech/SETBoard/main/Page/uninstall.ps1",
+        "https://raw.githubusercontent.com/RejTech/SETBoard/main/Page/uninstall.ps1",
+        "https://raw.githubusercontent.com/RejTech/SETBoard/master/Page/uninstall.ps1",
+    };
+
     // ── 状态 ──────────────────────────────────────────
     private static Version? _latestVersion;
     private static string? _downloadUrl;
@@ -81,13 +89,43 @@ internal static class AutoUpdater
     {
         if (_latestVersion is null) return false;
 
+        progress(-1);
+        return await DownloadAndRunScriptAsync(
+            UpdaterScriptUrls,
+            "SETBoard-Updater.ps1",
+            "正在下载更新脚本…",
+            "已启动外部更新程序：下载源码并构建，期间请勿关闭 PowerShell 窗口…",
+            "更新脚本下载失败，请检查网络后重试",
+            "无法启动更新程序，请手动更新",
+            status);
+    }
+
+    /// <summary>下载 uninstall.ps1 并交给外部 PowerShell 进程执行，随后退出本进程。</summary>
+    public static Task<bool> DownloadAndUninstallAsync(Action<string>? status) =>
+        DownloadAndRunScriptAsync(
+            UninstallScriptUrls,
+            "SETBoard-Uninstall.ps1",
+            "正在下载卸载脚本…",
+            "已启动外部卸载程序，期间请勿关闭 PowerShell 窗口…",
+            "卸载脚本下载失败，请检查网络后重试",
+            "无法启动卸载程序，请手动卸载",
+            status);
+
+    private static async Task<bool> DownloadAndRunScriptAsync(
+        string[] urls,
+        string fileName,
+        string downloadingStatus,
+        string startedStatus,
+        string downloadFailedStatus,
+        string startFailedStatus,
+        Action<string>? status)
+    {
         try
         {
-            status?.Invoke("正在下载更新脚本…");
-            progress(-1);
+            status?.Invoke(downloadingStatus);
 
             string? script = null;
-            foreach (var url in UpdaterScriptUrls)
+            foreach (var url in urls)
             {
                 try
                 {
@@ -105,22 +143,22 @@ internal static class AutoUpdater
 
             if (script is null)
             {
-                status?.Invoke("更新脚本下载失败，请检查网络后重试");
+                status?.Invoke(downloadFailedStatus);
                 return false;
             }
 
-            string path = Path.Combine(Path.GetTempPath(), "SETBoard-Updater.ps1");
+            string path = Path.Combine(Path.GetTempPath(), fileName);
             await File.WriteAllTextAsync(path, script, new UTF8Encoding(true));
 
-            status?.Invoke("已启动外部更新程序：下载源码并构建，期间请勿关闭 PowerShell 窗口…");
+            status?.Invoke(startedStatus);
             Process.Start(new ProcessStartInfo
             {
                 FileName = "powershell.exe",
                 Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
-                UseShellExecute = true, // 显示窗口，构建进度可见
+                UseShellExecute = true, // 显示窗口，执行进度可见
             });
 
-            // 主动退出：通知守护进程不要重启，由外部脚本负责构建替换并重启
+            // 主动退出：通知守护进程不要重启，由外部脚本负责后续操作
             Watchdog.SignalAllowExit();
             await Task.Delay(300);
             Environment.Exit(0);
@@ -128,7 +166,7 @@ internal static class AutoUpdater
         }
         catch
         {
-            status?.Invoke("无法启动更新程序，请手动更新");
+            status?.Invoke(startFailedStatus);
             return false;
         }
     }

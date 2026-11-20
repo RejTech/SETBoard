@@ -701,6 +701,7 @@ public sealed partial class BoardCanvas
 
     private void BeginGesture()
     {
+        if (ZoomLocked) return;
         if (_touchPoints.Count < 2) return;
         var points = _touchPoints.Values.ToList();
         _gestureStartCenter = Midpoint(points[0], points[1]);
@@ -713,6 +714,7 @@ public sealed partial class BoardCanvas
 
     private void UpdateGesture()
     {
+        if (ZoomLocked) return;
         if (_touchPoints.Count < 2) return;
         var points = _touchPoints.Values.Take(2).ToList();
         var center = Midpoint(points[0], points[1]);
