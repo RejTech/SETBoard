@@ -10,7 +10,7 @@ irm https://rejtech.github.io/SETBoard/install.ps1 | iex
 
 脚本会自动完成（**从源码构建**）：
 
-1. 检测并安装 **.NET 9 SDK**（优先 winget，失败则用官方安装脚本）
+1. 检测并安装 **.NET 9 SDK**（官方 dotnet-install 脚本，用户级安装，不用 winget、无需管理员）
 2. 下载**源码 zip**：优先 Gitee 镜像，失败自动回退 GitHub（main → master），带下载进度条
 3. `dotnet publish` 本地构建 win-x64 单文件 exe（需几分钟）
 4. 安装到 `%LOCALAPPDATA%\SETBoard`

@@ -90,29 +90,22 @@ if (Test-DotNet9Sdk $script:DotNet) {
     Write-Ok ".NET 9 SDK found: $($script:DotNet)"
 }
 else {
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        try {
-            Write-Host '  Installing .NET 9 SDK via winget...'
-            winget install --id Microsoft.DotNet.SDK.9 -e --silent `
-                --accept-source-agreements --accept-package-agreements
-        } catch { }
+    # winget often hangs at "Starting package install" (UAC prompt or a broken
+    # source), so use the official dotnet-install script instead: user-level
+    # install, no admin rights, visible download progress.
+    Write-Host '  Installing .NET 9 SDK via the official dotnet-install script...'
+    Write-Host '  This downloads about 230 MB from the Microsoft CDN.'
+    $di = Join-Path $env:TEMP 'dotnet-install.ps1'
+    Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $di -UseBasicParsing
+    $dotnetDir = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet'
+    # No -Runtime parameter: installs the full SDK (required to build).
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $di `
+        -Channel 9.0 -InstallDir $dotnetDir -NoPath
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if ($userPath -notlike "*$dotnetDir*") {
+        [Environment]::SetEnvironmentVariable('Path', "$userPath;$dotnetDir", 'User')
     }
-
     $script:DotNet = Find-DotNet
-    if (-not (Test-DotNet9Sdk $script:DotNet)) {
-        Write-Host '  Installing .NET 9 SDK via the official dotnet-install script...'
-        $di = Join-Path $env:TEMP 'dotnet-install.ps1'
-        Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $di -UseBasicParsing
-        $dotnetDir = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet'
-        # No -Runtime parameter: installs the full SDK (required to build).
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $di `
-            -Channel 9.0 -InstallDir $dotnetDir -NoPath
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        if ($userPath -notlike "*$dotnetDir*") {
-            [Environment]::SetEnvironmentVariable('Path', "$userPath;$dotnetDir", 'User')
-        }
-        $script:DotNet = Find-DotNet
-    }
 
     if (Test-DotNet9Sdk $script:DotNet) { Write-Ok '.NET 9 SDK installed.' }
     else { throw '.NET 9 SDK is required to build SETBoard. Install it from https://dotnet.microsoft.com/download/dotnet/9.0 and re-run.' }
