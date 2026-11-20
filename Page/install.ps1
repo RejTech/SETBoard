@@ -8,6 +8,9 @@
 # on Windows PowerShell 5.1 (no response charset = mojibake for CJK text).
 
 $ErrorActionPreference = 'Stop'
+# Invoke-WebRequest's progress rendering slows downloads down significantly.
+$ProgressPreference = 'SilentlyContinue'
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 $Repo       = 'RejTech/SETBoard'
 $InstallDir = Join-Path $env:LOCALAPPDATA 'SETBoard'
 $ExePath    = Join-Path $InstallDir 'SETBoard.exe'
@@ -83,19 +86,32 @@ if (Test-Path $ExePath) {
 
 $urls = @(
     "https://v4.gh-proxy.org/https://github.com/$Repo/releases/latest/download/SETBoard.exe",
-    "https://github.com/$Repo/releases/latest/download/SETBoard.exe",
-    "https://ghfast.top/https://github.com/$Repo/releases/latest/download/SETBoard.exe"
+    "https://ghfast.top/https://github.com/$Repo/releases/latest/download/SETBoard.exe",
+    "https://github.com/$Repo/releases/latest/download/SETBoard.exe"
 )
 
 $tmp = Join-Path $env:TEMP 'SETBoard-setup.exe'
 $downloaded = $false
+Add-Type -AssemblyName System.Net.Http
 foreach ($url in $urls) {
+    $client = $null
     try {
         Write-Host "  $url"
-        Invoke-WebRequest $url -OutFile $tmp -UseBasicParsing -TimeoutSec 180
+        # Streamed HttpClient download: no progress rendering, no buffering.
+        $client = New-Object System.Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromSeconds(180)
+        $response = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        if (-not $response.IsSuccessStatusCode) { throw "HTTP $([int]$response.StatusCode)" }
+        $source = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+        $target = [System.IO.File]::Create($tmp)
+        $source.CopyTo($target)
+        $target.Dispose()
+        $source.Dispose()
+        $response.Dispose()
         if ((Get-Item $tmp).Length -gt 1MB) { $downloaded = $true; break }
     }
     catch { Write-Warn 'Source failed, trying the next mirror...' }
+    finally { if ($client) { $client.Dispose() } }
 }
 if (-not $downloaded) {
     throw "Download failed. Get SETBoard.exe manually: https://github.com/$Repo/releases/latest"
