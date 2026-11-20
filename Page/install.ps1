@@ -163,6 +163,30 @@ $src = Get-ChildItem $Work -Directory |
     Select-Object -First 1
 if (-not $src) { throw 'SETBoard.csproj not found in the downloaded archive.' }
 
+# Build with the exact version of the latest GitHub Release, otherwise the
+# built app would offer an update to that same release on first launch.
+Write-Step 'Resolving the latest release version'
+$version = $null
+$versionClient = $null
+try {
+    $versionClient = New-Object System.Net.Http.HttpClient
+    $versionClient.Timeout = [TimeSpan]::FromSeconds(30)
+    $versionClient.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard-installer')
+    $json = $versionClient.GetStringAsync("https://api.github.com/repos/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
+    $release = $json | ConvertFrom-Json
+    $version = ($release.tag_name -replace '^[vV]', '')
+}
+catch { Write-Warn 'Could not read the latest release version; keeping the repository version.json.' }
+finally { if ($versionClient) { $versionClient.Dispose() } }
+
+if ($version) {
+    Write-Ok "Build version: $version"
+    [System.IO.File]::WriteAllText(
+        (Join-Path $src.FullName 'version.json'),
+        "{`"version`":`"$version`"}",
+        (New-Object System.Text.UTF8Encoding($false)))
+}
+
 Push-Location $src.FullName
 try {
     & $script:DotNet publish SETBoard.csproj `
