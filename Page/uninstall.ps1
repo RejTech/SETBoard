@@ -68,3 +68,16 @@ else {
 Write-Step 'Done'
 Write-Host '  .NET 9 was left installed (other apps may depend on it).'
 Write-Host '  Your saved whiteboard files were not touched.'
+
+# Pop a final message so the window does not just disappear.
+try {
+    Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+    [void][System.Windows.Forms.MessageBox]::Show(
+        "SETBoard has been uninstalled.`n`nYour saved whiteboard (.setb) files and the .NET 9 runtime were kept.",
+        'SETBoard uninstaller',
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information)
+}
+catch {
+    try { Read-Host 'Uninstall complete. Press Enter to close' } catch { }
+}
