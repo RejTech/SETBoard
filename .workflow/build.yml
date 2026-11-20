@@ -5,7 +5,7 @@ triggers:
   # 仅定时触发：每 6 小时一次（每天 4 次），不跟随 push / PR。
   # Gitee Go 定时只支持一个 cron 表达式，格式 M H D m d。
   schedule:
-    - cron: '0 */6 * * ?'
+    - cron: '0 */6 * * *'
 
 # 不再在 Gitee 构建：直接拉取 GitHub 最新 Release，
 # 按相同的 tag / 标题 / 描述 / 附件发布到 Gitee（详见 sync-release.sh）。
