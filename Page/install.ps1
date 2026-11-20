@@ -8,8 +8,6 @@
 # on Windows PowerShell 5.1 (no response charset = mojibake for CJK text).
 
 $ErrorActionPreference = 'Stop'
-# Invoke-WebRequest's progress rendering slows downloads down significantly.
-$ProgressPreference = 'SilentlyContinue'
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 $Repo       = 'RejTech/SETBoard'
 $InstallDir = Join-Path $env:LOCALAPPDATA 'SETBoard'
@@ -97,21 +95,43 @@ foreach ($url in $urls) {
     $client = $null
     try {
         Write-Host "  $url"
-        # Streamed HttpClient download: no progress rendering, no buffering.
+        # Streamed HttpClient download with a throttled progress bar.
         $client = New-Object System.Net.Http.HttpClient
         $client.Timeout = [TimeSpan]::FromSeconds(180)
         $response = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
         if (-not $response.IsSuccessStatusCode) { throw "HTTP $([int]$response.StatusCode)" }
+
+        $total = $response.Content.Headers.ContentLength
         $source = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
         $target = [System.IO.File]::Create($tmp)
-        $source.CopyTo($target)
+        $buffer = New-Object byte[] 81920
+        $received = 0L
+        $lastPercent = -1
+
+        while (($read = $source.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $target.Write($buffer, 0, $read)
+            $received += $read
+            if ($total -gt 0) {
+                $percent = [int]($received * 100 / $total)
+                if ($percent -ne $lastPercent) {
+                    $lastPercent = $percent
+                    $status = '{0}%  ({1:N1} MB / {2:N1} MB)' -f $percent, ($received / 1MB), ($total / 1MB)
+                    Write-Progress -Activity 'Downloading SETBoard' -Status $status -PercentComplete $percent
+                }
+            }
+        }
+        Write-Progress -Activity 'Downloading SETBoard' -Completed
+
         $target.Dispose()
         $source.Dispose()
         $response.Dispose()
         if ((Get-Item $tmp).Length -gt 1MB) { $downloaded = $true; break }
     }
     catch { Write-Warn 'Source failed, trying the next mirror...' }
-    finally { if ($client) { $client.Dispose() } }
+    finally {
+        Write-Progress -Activity 'Downloading SETBoard' -Completed -ErrorAction SilentlyContinue
+        if ($client) { $client.Dispose() }
+    }
 }
 if (-not $downloaded) {
     throw "Download failed. Get SETBoard.exe manually: https://github.com/$Repo/releases/latest"
