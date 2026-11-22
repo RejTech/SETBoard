@@ -238,8 +238,7 @@ Push-Location $src.FullName
 try {
     & $script:DotNet publish SETBoard.csproj `
         -c Release -r win-x64 --self-contained true `
-        -p:PublishSingleFile=true `
-        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:PublishSingleFile=false `
         -p:DebugType=none `
         -o publish
     $buildCode = $LASTEXITCODE

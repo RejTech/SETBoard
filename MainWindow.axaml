@@ -377,6 +377,13 @@
                 <Separator />
                 <MenuItem x:Name="DeletePageMenuItem" Header="删除本页…" Click="OnDeletePageClick" />
                 <Separator />
+                <MenuItem Click="OnFeedbackClick">
+                  <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Classes="icon" Text="&#xE15B;" />
+                    <TextBlock Text="使用问题反馈" />
+                  </StackPanel>
+                </MenuItem>
+                <Separator />
                 <MenuItem Header="关于 SETBoard" Click="OnAboutClick" />
                 <Separator />
                 <MenuItem Header="退出 SETBoard…" Click="OnExitClick" />

@@ -111,6 +111,13 @@ public sealed partial class BoardCanvas : Control
         DocumentChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public void SetBackground(uint background)
+    {
+        _document.Background = background;
+        InvalidateVisual();
+        DocumentChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public int PageCount => _document.Pages.Count;
     public int PageNumber => _document.CurrentPageIndex + 1;
 

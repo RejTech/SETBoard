@@ -16,6 +16,9 @@ public sealed class BoardDocument
     public double GridSize { get; set; } = 36;
     public uint Background { get; set; } = 0xFF0C1B24;
 
+    /// <summary>浅色背景（白色）。</summary>
+    public static readonly uint BackgroundLight = 0xFFFFFFFF;
+
     /// <summary>用另一份文档的内容替换当前文档（用于打开存档）。</summary>
     public void ReplaceWith(BoardDocument other)
     {

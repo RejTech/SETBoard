@@ -67,9 +67,10 @@ internal sealed class FunctionDialog : Window
         _strokeWidth = Math.Clamp(strokeWidth, 1.5, 6);
 
         Title = editing is null ? "绘制函数" : "编辑函数";
+        MinWidth = 480;
         Width = 620;
-        SizeToContent = SizeToContent.Height;
-        CanResize = false;
+        Height = 720;
+        CanResize = true;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.Parse("#0C1B24"));
@@ -357,20 +358,22 @@ internal sealed class FunctionDialog : Window
 
     private Control BuildContent(Slider slider, bool isNew)
     {
-        var root = new StackPanel
+        var root = new ScrollViewer
         {
-            Margin = new Thickness(24, 18, 24, 20),
-            Spacing = 10,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
 
-        root.Children.Add(new TextBlock
+        var panel = new StackPanel { Margin = new Thickness(24, 18, 24, 20), Spacing = 10 };
+
+        panel.Children.Add(new TextBlock
         {
             Text = isNew ? "绘制函数" : "编辑函数",
             FontSize = 19,
             FontWeight = FontWeight.SemiBold,
             Foreground = TextBrush,
         });
-        root.Children.Add(new TextBlock
+        panel.Children.Add(new TextBlock
         {
             Text = "一个坐标系里可以叠加多条曲线，颜色自动区分；参数 a 用滑块调节，切换曲线后分别调整。",
             FontSize = 12.5,
@@ -403,15 +406,16 @@ internal sealed class FunctionDialog : Window
         addButton.Click += (_, _) => AddDraft();
         Grid.SetColumn(addButton, 1);
         header.Children.Add(addButton);
-        root.Children.Add(header);
+        panel.Children.Add(header);
 
         var chipScroll = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Height = 32,
             Content = _chipPanel,
         };
-        root.Children.Add(chipScroll);
+        panel.Children.Add(chipScroll);
 
         // 预设
         var presetRow = new StackPanel
@@ -435,7 +439,7 @@ internal sealed class FunctionDialog : Window
             presetRow.Children.Add(button);
         }
 
-        root.Children.Add(presetRow);
+        panel.Children.Add(presetRow);
 
         var expressionRow = new Grid
         {
@@ -453,12 +457,12 @@ internal sealed class FunctionDialog : Window
         Grid.SetColumn(_expressionBox, 1);
         expressionRow.Children.Add(prefix);
         expressionRow.Children.Add(_expressionBox);
-        root.Children.Add(expressionRow);
+        panel.Children.Add(expressionRow);
 
         // LaTeX 排版显示：分数线、根号、上下标按数学格式渲染
         var formulaBorder = new Border
         {
-            Height = 58,
+            Height = 50,
             CornerRadius = new CornerRadius(12),
             Background = SurfaceBrush,
             BorderBrush = LineBrush,
@@ -466,11 +470,11 @@ internal sealed class FunctionDialog : Window
             ClipToBounds = true,
             Child = _formula,
         };
-        root.Children.Add(formulaBorder);
+        panel.Children.Add(formulaBorder);
 
         var previewBorder = new Border
         {
-            Height = 168,
+            Height = 160,
             CornerRadius = new CornerRadius(12),
             Background = SurfaceBrush,
             BorderBrush = LineBrush,
@@ -478,7 +482,7 @@ internal sealed class FunctionDialog : Window
             ClipToBounds = true,
             Child = _preview,
         };
-        root.Children.Add(previewBorder);
+        panel.Children.Add(previewBorder);
 
         var rangeRow = new StackPanel
         {
@@ -502,7 +506,7 @@ internal sealed class FunctionDialog : Window
             VerticalAlignment = VerticalAlignment.Center,
         });
         rangeRow.Children.Add(_xMaxBox);
-        root.Children.Add(rangeRow);
+        panel.Children.Add(rangeRow);
 
         var paramRow = new StackPanel
         {
@@ -519,10 +523,10 @@ internal sealed class FunctionDialog : Window
         });
         paramRow.Children.Add(slider);
         paramRow.Children.Add(_paramLabel);
-        root.Children.Add(paramRow);
+        panel.Children.Add(paramRow);
 
-        root.Children.Add(BuildKeypad());
-        root.Children.Add(_errorText);
+        panel.Children.Add(BuildKeypad());
+        panel.Children.Add(_errorText);
 
         var actions = new StackPanel
         {
@@ -562,8 +566,9 @@ internal sealed class FunctionDialog : Window
 
         actions.Children.Add(cancel);
         actions.Children.Add(confirm);
-        root.Children.Add(actions);
+        panel.Children.Add(actions);
 
+        root.Content = panel;
         return root;
     }
 

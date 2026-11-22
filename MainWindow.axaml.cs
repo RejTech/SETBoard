@@ -771,6 +771,20 @@ public partial class MainWindow : Window
         UpdateGridMenu();
     }
 
+    private async void OnFeedbackClick(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new FeedbackWindow();
+        await dialog.ShowDialog(this);
+    }
+
+    private void OnPptModeClick(object? sender, RoutedEventArgs e)
+    {
+        _pptModeEnabled = !_pptModeEnabled;
+        if (sender is MenuItem item) item.IsChecked = _pptModeEnabled;
+        if (!_pptModeEnabled) _annotation?.SetPassThrough(false);
+        ShowToast(_pptModeEnabled ? "PPT 模式已开启：放映时自动进入批注" : "PPT 模式已关闭");
+    }
+
     private void OnUndoClick(object? sender, RoutedEventArgs e) => Board.Undo();
 
     private void OnRedoClick(object? sender, RoutedEventArgs e) => Board.Redo();
@@ -888,7 +902,6 @@ public partial class MainWindow : Window
         _dirty = false; // SetDocument 会触发 MarkDirty，这里覆盖为全新未修改状态
         UpdateTitle();
         UpdatePageLabel();
-        UpdateGridMenu();
         ShowToast("已清空所有页面");
     }
 
@@ -972,14 +985,6 @@ public partial class MainWindow : Window
             _annotation?.SetPassThrough(false);
         };
         _pptWatcher.Start();
-    }
-
-    private void OnPptModeClick(object? sender, RoutedEventArgs e)
-    {
-        _pptModeEnabled = !_pptModeEnabled;
-        if (sender is MenuItem item) item.IsChecked = _pptModeEnabled;
-        if (!_pptModeEnabled) _annotation?.SetPassThrough(false);
-        ShowToast(_pptModeEnabled ? "PPT 模式已开启：放映时自动进入批注" : "PPT 模式已关闭");
     }
 
     private void OnFullScreenClick(object? sender, RoutedEventArgs e) => ToggleFullScreen();
@@ -1196,7 +1201,6 @@ public partial class MainWindow : Window
             _dirty = false;
             UpdateTitle();
             UpdatePageLabel();
-            UpdateGridMenu();
             ShowToast("已打开白板");
         }
         catch (Exception ex)
