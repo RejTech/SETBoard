@@ -948,6 +948,7 @@ public partial class MainWindow : Window
         _inkBar?.Hide();
         _annotation?.Close();
         _annotation = new DesktopAnnotationWindow();
+        _annotation.SetDesktopAnnotationMode(true); // 桌面批注模式：禁用缩放和平移
         _annotation.Closed += (_, _) =>
         {
             _annotation = null;

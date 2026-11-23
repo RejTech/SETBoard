@@ -386,6 +386,16 @@ internal sealed class DesktopAnnotationWindow : Window
         UpdatePageNav();
     }
 
+    /// <summary>桌面批注模式：禁用缩放和平移，保持固定视图。</summary>
+    public void SetDesktopAnnotationMode(bool enabled)
+    {
+        if (enabled)
+        {
+            _board.ZoomLocked = true;
+            _board.ResetView();
+        }
+    }
+
     private void UpdatePageNav()
     {
         // 翻页浮钮在屏幕两角，仅 PPT 模式显示；穿透时同样可点（独立窗口不穿透）
