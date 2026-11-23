@@ -1,99 +1,24 @@
-# SETBoard one-click installer (build from source)
+# SETBoard one-click installer (pre-built binary)
 # Usage (PowerShell):
 #   irm https://rejtech.github.io/SETBoard/install.ps1 | iex
 #
-# Steps: install .NET 9 SDK -> download the source zip (Gitee first, GitHub
-# fallback) -> dotnet publish win-x64 single file -> create a desktop shortcut
-# -> enable floating-bar auto-start.
+# Steps: check .NET 9 runtime -> download zip from GitHub Releases
+#       (gh-proxy / jsdelivr mirror first, GitHub fallback) -> extract ->
+#       create shortcuts -> launch.
 # Output is English-only so the script stays safe when piped through irm | iex
 # on Windows PowerShell 5.1 (no response charset = mojibake for CJK text).
 
 $ErrorActionPreference = 'Stop'
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 $GitHubRepo = 'RejTech/SETBoard'
-$GiteeRepo  = 'rejstudios/SETBoard'   # Gitee mirror: https://gitee.com/rejstudios/SETBoard
+
 $InstallDir = Join-Path $env:LOCALAPPDATA 'SETBoard'
 $ExePath    = Join-Path $InstallDir 'SETBoard.exe'
-$Work       = Join-Path $env:TEMP ('SETBoard-src-' + [Guid]::NewGuid().ToString('N'))
+$Work       = Join-Path $env:TEMP ('SETBoard-extract-' + [Guid]::NewGuid().ToString('N'))
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
-
-function Find-DotNet {
-    $cmd = Get-Command dotnet -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-    foreach ($p in @(
-        "$env:USERPROFILE\.dotnet\dotnet.exe",
-        "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe",
-        'C:\Program Files\dotnet\dotnet.exe')) {
-        if (Test-Path $p) { return $p }
-    }
-    return $null
-}
-
-function Test-DotNet9Sdk($exe) {
-    if (-not $exe) { return $false }
-    $sdks = & $exe --list-sdks 2>$null
-    return [bool]($sdks | Where-Object { $_ -match '^9\.' })
-}
-
-# Streamed HttpClient download with a throttled progress bar.
-function Get-LatestVersion {
-    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
-    # 1) github.com /releases/latest redirect — accurate, no api.github.com.
-    # (gh-proxy/jsDelivr do NOT proxy release pages or the API: verified 403/timeout.)
-    $client = $null
-    try {
-        $handler = New-Object System.Net.Http.HttpClientHandler
-        $handler.AllowAutoRedirect = $false
-        $client = New-Object System.Net.Http.HttpClient($handler)
-        $client.Timeout = [TimeSpan]::FromSeconds(15)
-        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
-        $r = $client.GetAsync("https://github.com/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
-        $loc = $r.Headers.Location
-        if ($loc -and $loc.ToString() -match '/releases/tag/([^/]+)') {
-            return ($Matches[1] -replace '^[vV]', '')
-        }
-    }
-    catch { }
-    finally { if ($client) { $client.Dispose() } }
-
-    # 2) Official API.
-    $client = $null
-    try {
-        $client = New-Object System.Net.Http.HttpClient
-        $client.Timeout = [TimeSpan]::FromSeconds(15)
-        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
-        $json = $client.GetStringAsync("https://api.github.com/repos/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
-        $release = $json | ConvertFrom-Json
-        if ($release.tag_name) { return ($release.tag_name -replace '^[vV]', '') }
-    }
-    catch { }
-    finally { if ($client) { $client.Dispose() } }
-
-    # 3) Gitee mirror tags — reachable in China; may lag behind GitHub.
-    $client = $null
-    try {
-        $client = New-Object System.Net.Http.HttpClient
-        $client.Timeout = [TimeSpan]::FromSeconds(15)
-        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
-        $json = $client.GetStringAsync("https://gitee.com/api/v5/repos/$GiteeRepo/tags").GetAwaiter().GetResult()
-        $tags = $json | ConvertFrom-Json
-        $latest = $tags |
-            Where-Object { $_.name -match '^v?\d+\.\d+\.\d+$' } |
-            ForEach-Object { [PSCustomObject]@{ Name = $_.name; Ver = [version]($_.name -replace '^v', '') } } |
-            Sort-Object Ver -Descending | Select-Object -First 1
-        if ($latest) {
-            Write-Warn 'Using a Gitee mirror tag; it may lag behind GitHub.'
-            return ($latest.Name -replace '^[vV]', '')
-        }
-    }
-    catch { }
-    finally { if ($client) { $client.Dispose() } }
-
-    return $null
-}
 
 # Streamed HttpClient download with a throttled progress bar.
 function Save-File($url, $path, $activity) {
@@ -136,43 +61,108 @@ function Save-File($url, $path, $activity) {
     }
 }
 
+# Resolve the latest release download URL, trying mirrors in order.
+function Get-LatestDownloadUrl {
+    $version = Get-LatestVersion
+    if (-not $version) { return $null }
+
+    # Build mirror URLs for the zip asset
+    $zipName = "SETBoard-v${version}-win-x64.zip"
+
+    # 1) gh-proxy mirror (fast in China)
+    $ghProxyUrl = "https://gh-proxy.com/github.com/RejTech/SETBoard/releases/download/v$version/$zipName"
+    try {
+        Write-Ok "Using gh-proxy mirror for: $zipName"
+        return @{ Url = $ghProxyUrl; Version = $version }
+    } catch {
+        Write-Warn "gh-proxy failed, trying jsdelivr..."
+    }
+
+    # 2) jsDelivr mirror
+    $jsdelivrUrl = "https://cdn.jsdelivr.net/gh/RejTech/SETBoard@v$version/$zipName"
+    try {
+        $client = New-Object System.Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromSeconds(30)
+        $r = $client.GetAsync("https://cdn.jsdelivr.net/gh/RejTech/SETBoard@v$version/$zipName", [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        if ($r.IsSuccessStatusCode) {
+            $r.Dispose()
+            $client.Dispose()
+            Write-Ok "Using jsdelivr mirror for: $zipName"
+            return @{ Url = $jsdelivrUrl; Version = $version }
+        }
+        $r.Dispose()
+        $client.Dispose()
+    } catch {
+        Write-Warn "jsdelivr failed, falling back to GitHub direct..."
+    }
+
+    # 3) GitHub direct (slowest, last resort)
+    $ghUrl = "https://github.com/RejTech/SETBoard/releases/download/v$version/$zipName"
+    Write-Warn "Using GitHub direct download for: $zipName"
+    return @{ Url = $ghUrl; Version = $version }
+}
+
+function Get-LatestVersion {
+    # 1) GitHub /releases/latest redirect — accurate, no api.github.com needed.
+    try {
+        $handler = New-Object System.Net.Http.HttpClientHandler
+        $handler.AllowAutoRedirect = $false
+        $client = New-Object System.Net.Http.HttpClient($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds(15)
+        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
+        $r = $client.GetAsync("https://github.com/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
+        $loc = $r.Headers.Location
+        if ($loc -and $loc.ToString() -match '/releases/tag/v(\d+\.\d+\.\d+)') {
+            $client.Dispose()
+            return $Matches[1]
+        }
+        $client.Dispose()
+    }
+    catch { }
+
+    # 2) Official API fallback.
+    try {
+        $client = New-Object System.Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromSeconds(15)
+        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
+        $json = $client.GetStringAsync("https://api.github.com/repos/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
+        $release = $json | ConvertFrom-Json
+        if ($release.tag_name) {
+            $client.Dispose()
+            return ($release.tag_name -replace '^[vV]', '')
+        }
+        $client.Dispose()
+    }
+    catch { }
+
+    return $null
+}
+
 Write-Host ''
-Write-Host '  SETBoard installer (build from source)' -ForegroundColor Yellow
+Write-Host '  SETBoard installer (pre-built binary)' -ForegroundColor Yellow
 Write-Host '  Touch whiteboard for classrooms - https://github.com/RejTech/SETBoard'
 
-# ------------------------------------------------------------- .NET 9 SDK
-Write-Step 'Checking .NET 9 SDK'
-$script:DotNet = Find-DotNet
-if (Test-DotNet9Sdk $script:DotNet) {
-    Write-Ok ".NET 9 SDK found: $($script:DotNet)"
+# ------------------------------------------------------------- Check .NET 9 Runtime
+# The self-contained build bundles the runtime, but a quick check is still useful.
+Write-Step 'Checking .NET 9 Runtime'
+$dotnetExe = $null
+foreach ($p in @(
+    "$env:USERPROFILE\.dotnet\dotnet.exe",
+    "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe",
+    'C:\Program Files\dotnet\dotnet.exe')) {
+    if (Test-Path $p) { $dotnetExe = $p; break }
 }
-else {
-    # winget often hangs at "Starting package install" (UAC prompt or a broken
-    # source), so use the official dotnet-install script instead: user-level
-    # install, no admin rights, visible download progress.
-    Write-Host '  Installing .NET 9 SDK via the official dotnet-install script...'
-    Write-Host '  This downloads about 230 MB from the Microsoft CDN.'
-    $di = Join-Path $env:TEMP 'dotnet-install.ps1'
-    Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $di -UseBasicParsing
-    $dotnetDir = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet'
-    # No -Runtime parameter: installs the full SDK (required to build).
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $di `
-        -Channel 9.0 -InstallDir $dotnetDir -NoPath
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    if ($userPath -notlike "*$dotnetDir*") {
-        [Environment]::SetEnvironmentVariable('Path', "$userPath;$dotnetDir", 'User')
-    }
-    $script:DotNet = Find-DotNet
 
-    if (Test-DotNet9Sdk $script:DotNet) { Write-Ok '.NET 9 SDK installed.' }
-    else { throw '.NET 9 SDK is required to build SETBoard. Install it from https://dotnet.microsoft.com/download/dotnet/9.0 and re-run.' }
+if ($dotnetExe) {
+    Write-Ok ".NET runtime found: $($dotnetExe)"
+} else {
+    Write-Warn '.NET 9 runtime not found — the self-contained build includes it, but having a system runtime is recommended.'
 }
 
 # ------------------------------------------------------------- Stop running app
 $running = Get-Process SETBoard -ErrorAction SilentlyContinue
 if ($running) {
     Write-Step 'Stopping the running SETBoard'
-    # Signal the watchdog not to restart the app, then stop both processes.
     try {
         $allowExit = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::ManualReset, 'SETBoard.AllowExit')
         $allowExit.Set()
@@ -184,76 +174,36 @@ if ($running) {
     Write-Ok 'SETBoard stopped.'
 }
 
-# ------------------------------------------------------------- Download source
-Write-Step 'Downloading the source code'
-New-Item -ItemType Directory -Force -Path $Work | Out-Null
+# ------------------------------------------------------------- Download from Releases
+Write-Step 'Downloading the latest release'
 Add-Type -AssemblyName System.Net.Http
 
-# Gitee first (faster in CN), GitHub as fallback.
-$sources = @(
-    "https://gitee.com/$GiteeRepo/repository/archive/master.zip",
-    "https://gitee.com/$GiteeRepo/repository/archive/main.zip",
-    "https://github.com/$GitHubRepo/archive/refs/heads/main.zip",
-    "https://github.com/$GitHubRepo/archive/refs/heads/master.zip"
-)
-
-$zip = Join-Path $Work 'src.zip'
-$downloaded = $false
-foreach ($url in $sources) {
-    try {
-        if (Save-File $url $zip 'Downloading SETBoard source') {
-            if ((Get-Item $zip).Length -gt 100KB) { $downloaded = $true; break }
-        }
-    }
-    catch { Write-Warn 'Source failed, trying the next mirror...' }
-}
-if (-not $downloaded) {
-    throw "Source download failed. Check the Gitee path ($GiteeRepo) or download https://github.com/$GitHubRepo manually."
-}
-Write-Ok 'Source downloaded.'
-
-# ------------------------------------------------------------- Build
-Write-Step 'Building SETBoard (dotnet publish, may take a few minutes)'
-Expand-Archive -Path $zip -DestinationPath $Work -Force
-$src = Get-ChildItem $Work -Directory |
-    Where-Object { Test-Path (Join-Path $_.FullName 'SETBoard.csproj') } |
-    Select-Object -First 1
-if (-not $src) { throw 'SETBoard.csproj not found in the downloaded archive.' }
-
-# Build with the exact version of the latest GitHub Release, otherwise the
-# built app would offer an update to that same release on first launch.
-Write-Step 'Resolving the latest release version'
-$version = Get-LatestVersion
-if (-not $version) { Write-Warn 'Could not resolve the release version; keeping the repository version.json.' }
-
-if ($version) {
-    Write-Ok "Build version: $version"
-    [System.IO.File]::WriteAllText(
-        (Join-Path $src.FullName 'version.json'),
-        "{`"version`":`"$version`"}",
-        (New-Object System.Text.UTF8Encoding($false)))
+$download = Get-LatestDownloadUrl
+if (-not $download) {
+    throw "Could not resolve the latest release version. Check your network and try again."
 }
 
-Push-Location $src.FullName
-try {
-    & $script:DotNet publish SETBoard.csproj `
-        -c Release -r win-x64 --self-contained true `
-        -p:PublishSingleFile=false `
-        -p:DebugType=none `
-        -o publish
-    $buildCode = $LASTEXITCODE
+New-Item -ItemType Directory -Force -Path $Work | Out-Null
+$zip = Join-Path $Work 'SETBoard.zip'
+
+if (-not (Save-File $download.Url $zip ('Downloading SETBoard v' + $download.Version))) {
+    throw "Download failed. Check your network and try again."
 }
-finally { Pop-Location }
-if ($buildCode -ne 0) { throw "dotnet publish failed with exit code $buildCode." }
+Write-Ok "Downloaded v$($download.Version)"
 
-$publish = Join-Path $src.FullName 'publish'
-if (-not (Test-Path (Join-Path $publish 'SETBoard.exe'))) { throw 'Build output SETBoard.exe not found.' }
-Write-Ok 'Build succeeded.'
-
-# ------------------------------------------------------------- Install
+# ------------------------------------------------------------- Extract & Install
 Write-Step 'Installing'
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-Copy-Item (Join-Path $publish '*') $InstallDir -Recurse -Force
+Expand-Archive -Path $zip -DestinationPath $Work -Force
+
+# Find the extracted directory (may have nested structure)
+$extracted = Get-ChildItem $Work -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'SETBoard.exe') } | Select-Object -First 1
+if (-not $extracted) {
+    # Fallback: use the work directory itself
+    $extracted = [PSCustomObject]@{ FullName = $Work }
+}
+
+Copy-Item (Join-Path $extracted.FullName '*') $InstallDir -Recurse -Force
 Write-Ok "Installed to $ExePath"
 
 # ------------------------------------------------------------- Shortcuts
@@ -281,4 +231,5 @@ Write-Host '  Remove the SETBoard shortcut from shell:startup to disable auto-st
 Write-Step 'Done'
 Start-Process $ExePath
 Remove-Item $Work -Recurse -Force -ErrorAction SilentlyContinue
-Write-Ok 'SETBoard launched. Enjoy your class!'
+Remove-Item $zip -ErrorAction SilentlyContinue
+Write-Ok "SETBoard v$($download.Version) launched. Enjoy your class!"

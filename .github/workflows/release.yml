@@ -29,7 +29,17 @@ jobs:
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
         shell: pwsh
 
-      - name: 发布 win-x64 单文件
+      - name: 完整自包含构建（用于 zip）
+        run: >
+          dotnet publish SETBoard.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=false
+          -p:DebugType=none
+          -o publish-full
+
+      - name: 单文件构建（用于直接下载 exe）
         run: >
           dotnet publish SETBoard.csproj
           -c Release
@@ -38,10 +48,21 @@ jobs:
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:DebugType=none
-          -o publish
+          -o publish-single
 
-      - name: 打包
-        run: Compress-Archive -Path publish/* -DestinationPath "SETBoard-v$env:VERSION-win-x64.zip"
+      - name: 打包 zip（完整构建）
+        run: Compress-Archive -Path publish-full/* -DestinationPath "SETBoard-v$env:VERSION-win-x64.zip"
+        shell: pwsh
+
+      - name: 准备 Release 说明
+        run: |
+          $body = @"
+          ${{ github.event.head_commit.message }}
+
+          [View Changes](${{ github.event.compare.url }})
+          "@
+          $body | Out-File -FilePath "$PWD/release-body.txt" -Encoding utf8
+          "RELEASE_BODY_PATH=$PWD/release-body.txt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
         shell: pwsh
 
       - name: 创建 Release
@@ -51,7 +72,7 @@ jobs:
           name: SETBoard v${{ env.VERSION }}
           files: |
             SETBoard-v${{ env.VERSION }}-win-x64.zip
-            publish/SETBoard.exe
-          generate_release_notes: true
+            publish-single/SETBoard.exe
+          body_path: ${{ env.RELEASE_BODY_PATH }}
           draft: false
           prerelease: false

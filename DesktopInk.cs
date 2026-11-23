@@ -333,6 +333,15 @@ internal sealed class DesktopAnnotationWindow : Window
                 return;
             }
 
+            // PPT 模式：支持 PageUp / PageDown 直接翻页（即使工具栏窗口获得焦点也可用）
+            if (_pptMode && (e.Key == Key.PageUp || e.Key == Key.PageDown))
+            {
+                int delta = e.Key == Key.PageDown ? 1 : -1;
+                NavigateSlide(delta);
+                e.Handled = true;
+                return;
+            }
+
             if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.Z)
             {
                 _board.Undo();
