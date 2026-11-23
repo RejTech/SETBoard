@@ -2,6 +2,7 @@
 # The app downloads this file and runs it in a NEW PowerShell window, then
 # exits itself. This script stops SETBoard (including its watchdog), downloads
 # the latest release zip and restarts the app. Shortcuts are left untouched.
+# Usage: called by AutoUpdater.cs with known version as $args[0]
 # Output is English-only for PowerShell 5.1 compatibility.
 
 $ErrorActionPreference = 'Stop'
@@ -56,40 +57,10 @@ function Save-File($url, $path, $activity) {
     }
 }
 
-# Resolve the latest release version and download URL.
-function Get-LatestVersion {
-    # 1) GitHub /releases/latest redirect — fast, no API needed.
-    try {
-        $handler = New-Object System.Net.Http.HttpClientHandler
-        $handler.AllowAutoRedirect = $false
-        $client = New-Object System.Net.Http.HttpClient($handler)
-        $client.Timeout = [TimeSpan]::FromSeconds(15)
-        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
-        $r = $client.GetAsync("https://github.com/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
-        $loc = $r.Headers.Location
-        if ($loc -and $loc.ToString() -match '/releases/tag/v(\d+\.\d+\.\d+)') {
-            $client.Dispose()
-            return $Matches[1]
-        }
-        $client.Dispose()
-    } catch { }
-
-    # 2) Official API fallback.
-    try {
-        $client = New-Object System.Net.Http.HttpClient
-        $client.Timeout = [TimeSpan]::FromSeconds(15)
-        $client.DefaultRequestHeaders.UserAgent.ParseAdd('SETBoard')
-        $json = $client.GetStringAsync("https://api.github.com/repos/$GitHubRepo/releases/latest").GetAwaiter().GetResult()
-        $release = $json | ConvertFrom-Json
-        if ($release.tag_name) {
-            $client.Dispose()
-            return ($release.tag_name -replace '^[vV]', '')
-        }
-        $client.Dispose()
-    } catch { }
-
-    return $null
-}
+# Accept version from AutoUpdater.cs via command-line argument,
+# or fall back to self-resolution for standalone use (install.ps1).
+$version = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { Get-LatestVersion }
+if (-not $version) { throw 'Could not resolve the latest release version.' }
 
 function Get-LatestDownloadUrl($version) {
     $zipName = "SETBoard-v${version}-win-x64.zip"
@@ -134,9 +105,6 @@ try {
     Write-Ok 'SETBoard stopped.'
 
     # --------------------------------------------------------- Download & Install
-    $version = Get-LatestVersion
-    if (-not $version) { throw 'Could not resolve the latest release version.' }
-
     Write-Step "Downloading SETBoard v$version"
     $downloadUrl = Get-LatestDownloadUrl $version
     New-Item -ItemType Directory -Force -Path $Work | Out-Null

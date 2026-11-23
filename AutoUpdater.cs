@@ -102,10 +102,10 @@ internal static class AutoUpdater
             UpdaterScriptUrls,
             "SETBoard-Updater.ps1",
             "正在下载更新脚本…",
-            "已启动外部更新程序：下载源码并构建，期间请勿关闭 PowerShell 窗口…",
+            "已启动外部更新程序：下载并安装新版本，期间请勿关闭 PowerShell 窗口…",
             "更新脚本下载失败，请检查网络后重试",
             "无法启动更新程序，请手动更新",
-            status);
+            status, _latestVersion.ToString());
     }
 
     /// <summary>下载 uninstall.ps1 并交给外部 PowerShell 进程执行，随后退出本进程。</summary>
@@ -117,7 +117,7 @@ internal static class AutoUpdater
             "已启动外部卸载程序，期间请勿关闭 PowerShell 窗口…",
             "卸载脚本下载失败，请检查网络后重试",
             "无法启动卸载程序，请手动卸载",
-            status);
+            status, null);
 
     /// <summary>下载 reinstall.ps1 并交给外部 PowerShell 进程执行，随后退出本进程。</summary>
     public static Task<bool> DownloadAndReinstallAsync(Action<string>? status) =>
@@ -128,7 +128,7 @@ internal static class AutoUpdater
             "已启动外部重装程序：先卸载再安装，期间请勿关闭 PowerShell 窗口…",
             "重装脚本下载失败，请检查网络后重试",
             "无法启动重装程序，请手动重装",
-            status);
+            status, null);
 
     private static async Task<bool> DownloadAndRunScriptAsync(
         string[] urls,
@@ -137,7 +137,8 @@ internal static class AutoUpdater
         string startedStatus,
         string downloadFailedStatus,
         string startFailedStatus,
-        Action<string>? status)
+        Action<string>? status,
+        string? knownVersion)
     {
         try
         {
@@ -170,10 +171,13 @@ internal static class AutoUpdater
             await File.WriteAllTextAsync(path, script, new UTF8Encoding(true));
 
             status?.Invoke(startedStatus);
+            string[] args = knownVersion != null
+                ? new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, knownVersion }
+                : new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path };
             Process.Start(new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{path}\"",
+                Arguments = string.Join(" ", args),
                 UseShellExecute = true, // 显示窗口，执行进度可见
             });
 
