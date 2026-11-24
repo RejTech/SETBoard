@@ -95,7 +95,7 @@ internal sealed class FunctionDialog : Window
         _expressionBox = new TextBox
         {
             Text = _drafts[0].Latex,
-            Watermark = "例如 \\frac{1}{1+x^2}、\\sin(a x)、\\sqrt{x}",
+            PlaceholderText = "例如 \\frac{1}{1+x^2}、\\sin(a x)、\\sqrt{x}",
             FontFamily = new FontFamily("Cascadia Mono, Consolas, Microsoft YaHei UI"),
             FontSize = 18,
             Height = 46,

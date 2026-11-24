@@ -22,7 +22,7 @@ internal sealed class DesktopInkBar : Window
     public DesktopInkBar()
     {
         Title = "SETBoard 浮窗";
-        SystemDecorations = SystemDecorations.None;
+        WindowDecorations = WindowDecorations.None;
         CanResize = false;
         ShowInTaskbar = false;
         Topmost = true;
@@ -111,7 +111,7 @@ internal sealed class DesktopAnnotationWindow : Window
     public DesktopAnnotationWindow()
     {
         Title = "桌面批注";
-        SystemDecorations = SystemDecorations.None;
+        WindowDecorations = WindowDecorations.None;
         CanResize = false;
         ShowInTaskbar = false;
         Topmost = true;
@@ -286,7 +286,7 @@ internal sealed class DesktopAnnotationWindow : Window
         // 工具栏独立窗口：不穿透，画布穿透时仍能选工具、翻页、退出
         _barWindow = new Window
         {
-            SystemDecorations = SystemDecorations.None,
+            WindowDecorations = WindowDecorations.None,
             CanResize = false,
             ShowInTaskbar = false,
             Topmost = true,
@@ -333,10 +333,10 @@ internal sealed class DesktopAnnotationWindow : Window
                 return;
             }
 
-            // PPT 模式：支持 PageUp / PageDown 直接翻页（即使工具栏窗口获得焦点也可用）
-            if (_pptMode && (e.Key == Key.PageUp || e.Key == Key.PageDown))
+            // PPT 模式：PageUp/PageDown / 方向键 直接翻页（即使工具栏窗口获得焦点也可用）
+            if (_pptMode && (e.Key == Key.PageUp || e.Key == Key.PageDown || e.Key == Key.Left || e.Key == Key.Right))
             {
-                int delta = e.Key == Key.PageDown ? 1 : -1;
+                int delta = (e.Key == Key.PageDown || e.Key == Key.Right) ? 1 : -1;
                 NavigateSlide(delta);
                 e.Handled = true;
                 return;
@@ -455,11 +455,23 @@ internal sealed class DesktopAnnotationWindow : Window
         if (PptInterop.TryGetSlideShow(out int actual)) SyncToSlide(actual);
     }
 
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheelChanged(e);
+        // PPT 模式：滚轮翻页（即使工具栏窗口获得焦点也可用）
+        if (_pptMode)
+        {
+            int delta = e.Delta.Y > 0 ? -1 : 1; // 向上滚动=下一页，向下滚动=上一页
+            NavigateSlide(delta);
+            e.Handled = true;
+        }
+    }
+
     private static Window CreateNavWindow(Control content)
     {
         var window = new Window
         {
-            SystemDecorations = SystemDecorations.None,
+            WindowDecorations = WindowDecorations.None,
             CanResize = false,
             ShowInTaskbar = false,
             Topmost = true,

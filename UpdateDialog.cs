@@ -21,7 +21,7 @@ internal sealed class UpdateDialog : Window
     {
         _owner = owner;
         Title = "SETBoard 更新";
-        SystemDecorations = SystemDecorations.None;
+        WindowDecorations = WindowDecorations.None;
         CanResize = false;
         ShowInTaskbar = false;
         SizeToContent = SizeToContent.WidthAndHeight;
