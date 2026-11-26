@@ -982,8 +982,9 @@ public partial class MainWindow : Window
         };
         _pptWatcher.SlideShowEnded += (_, _) =>
         {
-            _annotation?.SetPptMode(false);
-            _annotation?.SetPassThrough(false);
+            // PPT 退出：关闭批注浮窗，恢复主界面与小浮条
+            _annotation?.Close();
+            RestoreMainWindow();
         };
         _pptWatcher.Start();
     }
