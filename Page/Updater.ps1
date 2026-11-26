@@ -46,17 +46,10 @@ function Test-Url($url) {
 function Get-LatestDownloadUrl($version) {
     $zipName = "SETBoard-v${version}-win-x64.zip"
 
-    # Try gh-proxy mirror first (fast in China).
+    # gh-proxy mirror (fast in China).
     $url = "https://gh-proxy.com/github.com/RejTech/SETBoard/releases/download/v$version/$zipName"
-    if (Test-Url $url) { Write-Ok "Using gh-proxy mirror for: $zipName"; return $url }
-
-    # Try jsDelivr mirror.
-    $url = "https://cdn.jsdelivr.net/gh/RejTech/SETBoard@v$version/$zipName"
-    if (Test-Url $url) { Write-Ok "Using jsdelivr mirror for: $zipName"; return $url }
-
-    # Fallback to GitHub direct.
-    Write-Warn "Using GitHub direct download for: $zipName"
-    return "https://github.com/RejTech/SETBoard/releases/download/v$version/$zipName"
+    Write-Ok "Using gh-proxy mirror for: $zipName"
+    return $url
 }
 
 try {

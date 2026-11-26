@@ -13,10 +13,7 @@ $ErrorActionPreference = 'Stop'
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 $InstallDir = Join-Path $env:LOCALAPPDATA 'SETBoard'
 $InstallScriptUrls = @(
-    'https://rejtech.github.io/SETBoard/install.ps1',
-    'https://v4.gh-proxy.org/https://raw.githubusercontent.com/RejTech/SETBoard/main/Page/install.ps1',
-    'https://raw.githubusercontent.com/RejTech/SETBoard/main/Page/install.ps1',
-    'https://raw.githubusercontent.com/RejTech/SETBoard/master/Page/install.ps1'
+    'https://gh-proxy.com/https://raw.githubusercontent.com/RejTech/SETBoard/main/Page/install.ps1'
 )
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
