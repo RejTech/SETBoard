@@ -13,12 +13,10 @@
 4. 启动**独立 PowerShell 窗口**运行更新脚本，SETBoard 主进程立即退出
 5. 外部脚本完成全部工作（进度可见）：
    - 停止 SETBoard 与守护进程
-   - 下载源码 zip（Gitee 优先，GitHub 回退）
-   - 写入最新 Release 版本号，`dotnet publish` 本地构建（需几分钟）
+   - 下载预构建 zip（gh-proxy 优先 → jsdelivr 回退 → GitHub 直连），无需本地编译
    - 覆盖安装目录 → 启动新版 → 清理临时文件
 
-> 构建期间请保持 PowerShell 窗口打开；失败时窗口会停住显示原因，不会一闪而过。
-> 用独立进程替换是因为 Windows 不允许覆盖正在运行的 exe/dll，进程内自替换会卡死。
+> gh-proxy 在国内最快；jsdelivr CDN 次之；均不可用时自动回退 GitHub 直连。
 
 ## 常见问题
 

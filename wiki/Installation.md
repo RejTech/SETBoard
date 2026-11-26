@@ -8,30 +8,28 @@
 irm https://rejtech.github.io/SETBoard/install.ps1 | iex
 ```
 
-脚本会自动完成（**从源码构建**）：
+脚本会自动完成（**下载预构建二进制包**）：
 
-1. 检测并安装 **.NET 9 SDK**（官方 dotnet-install 脚本，用户级安装，不用 winget、无需管理员）
-2. 下载**源码 zip**：优先 Gitee 镜像，失败自动回退 GitHub（main → master），带下载进度条
-3. `dotnet publish` 本地构建 win-x64 单文件 exe（需几分钟）
-4. 安装到 `%LOCALAPPDATA%\SETBoard`
-5. 创建**桌面快捷方式**（浮窗模式 `--float`）
-6. 在**启动文件夹**创建快捷方式，实现开机浮窗自启
-7. 启动 SETBoard（浮窗态）
+1. 检测 **.NET 9 运行时**（自包含包自带运行时；若系统有运行时会提示建议安装）
+2. 下载预构建 zip（gh-proxy 优先 → jsdelivr 回退 → GitHub 直连），带下载进度条
+3. 解压到 `%LOCALAPPDATA%\SETBoard`
+4. 创建**桌面快捷方式**（浮窗模式 `--float`）
+5. 在**启动文件夹**创建快捷方式，实现开机浮窗自启
+6. 启动 SETBoard（浮窗态）
 
 > 全程无需管理员权限；若 .NET 安装环节请求管理员授权，允许即可。
 > 已运行的 SETBoard 会先被安全停止（含守护进程），装完自动启动。
-> Gitee 镜像为 [gitee.com/rejstudios/SETBoard](https://gitee.com/rejstudios/SETBoard)，不可用时自动回退 GitHub。
+> gh-proxy 在国内最快；jsdelivr CDN 次之；均不可用时自动回退 GitHub 直连。
 
 ## 手动安装
 
-1. 安装 [.NET 9 桌面运行时](https://dotnet.microsoft.com/download/dotnet/9.0)（.NET Desktop Runtime 9.x）
-2. 下载最新版 [SETBoard.exe](https://github.com/RejTech/SETBoard/releases/latest/download/SETBoard.exe)
-3. 放到任意目录运行
+1. 下载最新版 [SETBoard.exe](https://github.com/RejTech/SETBoard/releases/latest/download/SETBoard.exe)（自包含，无需 .NET 运行时）
+2. 放到任意目录运行
 
 国内网络可用加速地址：
 
 ```text
-https://v4.gh-proxy.org/https://github.com/RejTech/SETBoard/releases/latest/download/SETBoard.exe
+https://gh-proxy.com/github.com/RejTech/SETBoard/releases/latest/download/SETBoard.exe
 ```
 
 ## 启动参数

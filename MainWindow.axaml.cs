@@ -982,9 +982,11 @@ public partial class MainWindow : Window
         };
         _pptWatcher.SlideShowEnded += (_, _) =>
         {
-            // PPT 退出：关闭批注浮窗，恢复主界面与小浮条
+            // PPT 退出：关闭批注浮窗，恢复小浮条，结束放映黑屏窗口
             _annotation?.Close();
-            RestoreMainWindow();
+            _inkBar ??= CreateInkBar();
+            _inkBar.ShowAtDesktopCorner();
+            PptInterop.ExitSlideShow();
         };
         _pptWatcher.Start();
     }
