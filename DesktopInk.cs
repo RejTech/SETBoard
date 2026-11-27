@@ -98,66 +98,6 @@ internal sealed class DesktopAnnotationWindow : Window
     private int _slidePage = 1; // 当前幻灯片页码，翻页按钮先按它推算目标页
     private readonly Window _prevNavWindow;
     private readonly Window _nextNavWindow;
-    private DispatcherTimer? _autoHideTimer; // PPT 模式下工具栏自动隐藏计时器
-    private CancellationTokenSource? _hideCts; // 取消当前渐隐任务
-    private EventHandler<PointerEventArgs>? _autoHideHandler; // 用于移除事件绑定
-
-    /// <summary>PPT 模式下：重置自动隐藏计时器，若正在渐隐则立即恢复可见。</summary>
-    private void ResetAutoHide()
-    {
-        if (_pptMode)
-        {
-            _hideCts?.Cancel();
-            _hideCts?.Dispose();
-            _hideCts = null;
-            FadeInToolbar();
-            _autoHideTimer?.Stop();
-            _autoHideTimer?.Start();
-        }
-    }
-
-    private async Task FadeOutToolbarAsync()
-    {
-        if (_barWindow is null) return;
-        try
-        {
-            var fade = new Animation
-            {
-                Duration = TimeSpan.FromMilliseconds(600),
-                Easing = new CubicEaseOut(),
-                FillMode = FillMode.Forward,
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(Visual.OpacityProperty, _barWindow.Opacity) } },
-                    new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(Visual.OpacityProperty, 0d) } },
-                },
-            };
-            await fade.RunAsync(_barWindow);
-        }
-        catch { }
-    }
-
-    private async void FadeInToolbar()
-    {
-        if (_barWindow is null) return;
-        try
-        {
-            var fade = new Animation
-            {
-                Duration = TimeSpan.FromMilliseconds(400),
-                Easing = new CubicEaseOut(),
-                FillMode = FillMode.Forward,
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0d), Setters = { new Setter(Visual.OpacityProperty, 0d) } },
-                    new KeyFrame { Cue = new Cue(1d), Setters = { new Setter(Visual.OpacityProperty, 1d) } },
-                },
-            };
-            _barWindow.Opacity = 0;
-            await fade.RunAsync(_barWindow);
-        }
-        catch { }
-    }
 
     private static readonly (BoardTool Tool, string Tip, string Data)[] ShapeItems =
     {
@@ -369,14 +309,6 @@ internal sealed class DesktopAnnotationWindow : Window
         _prevNavWindow.SizeChanged += (_, _) => LayoutNavWindows();
         _nextNavWindow.SizeChanged += (_, _) => LayoutNavWindows();
 
-        // 翻页按钮交互也重置自动隐藏计时器
-        EventHandler<PointerEventArgs>? navHandler = null;
-        navHandler = (_, _) => { if (_pptMode) ResetAutoHide(); };
-        _prevNavWindow.AddHandler(PointerMovedEvent, navHandler, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        _prevNavWindow.AddHandler(PointerPressedEvent, navHandler, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        _nextNavWindow.AddHandler(PointerMovedEvent, navHandler, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        _nextNavWindow.AddHandler(PointerPressedEvent, navHandler, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-
         // 与白板一致：点击画布任意处，自动收起颜色/粗细等二级面板
         _board.AddHandler(PointerPressedEvent, (_, _) =>
         {
@@ -432,20 +364,6 @@ internal sealed class DesktopAnnotationWindow : Window
 
         UiaTopmost.MakeTopmost(this);
         WindowFx.FadeIn(this);
-
-        // 初始化 PPT 模式自动隐藏计时器（30 秒无操作后渐隐工具栏）
-        _autoHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _autoHideTimer.Tick += (_, _) =>
-        {
-            if (!_pptMode || _barWindow is null) return;
-            var cts = new CancellationTokenSource();
-            _hideCts = cts;
-            Task.Run(async () =>
-            {
-                await Task.Delay(TimeSpan.FromSeconds(29));
-                if (_hideCts == cts) await FadeOutToolbarAsync();
-            }, cts.Token);
-        };
     }
 
     private void AddTool(Panel panel, string glyph, string tip, BoardTool tool)
@@ -473,38 +391,8 @@ internal sealed class DesktopAnnotationWindow : Window
     {
         _pptMode = enabled;
         _board.ZoomLocked = enabled;
-        if (enabled) _board.ResetView();
+        if (enabled) _board.ResetView(); // 笔迹与幻灯片保持屏幕对齐
         UpdatePageNav();
-
-        // PPT 模式：启动工具栏自动隐藏计时器，并绑定交互事件重置计时器
-        if (enabled)
-        {
-            _autoHideTimer?.Start();
-            ResetAutoHide();
-
-            // 创建统一的事件处理委托（便于后续移除）
-            _autoHideHandler = (_, _) => ResetAutoHide();
-            _barWindow?.AddHandler(PointerMovedEvent, _autoHideHandler, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            _barWindow?.AddHandler(PointerPressedEvent, _autoHideHandler, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            _barWindow?.AddHandler(PointerReleasedEvent, _autoHideHandler, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        }
-        else
-        {
-            _autoHideTimer?.Stop();
-            _hideCts?.Cancel();
-            _hideCts?.Dispose();
-            _hideCts = null;
-            FadeInToolbar();
-
-            // 移除事件绑定（避免内存泄漏）
-            if (_barWindow is not null && _autoHideHandler is not null)
-            {
-                _barWindow.RemoveHandler(PointerMovedEvent, _autoHideHandler);
-                _barWindow.RemoveHandler(PointerPressedEvent, _autoHideHandler);
-                _barWindow.RemoveHandler(PointerReleasedEvent, _autoHideHandler);
-                _autoHideHandler = null;
-            }
-        }
     }
 
     /// <summary>桌面批注模式：禁用缩放和平移，保持固定视图。</summary>

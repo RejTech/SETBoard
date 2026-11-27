@@ -16,17 +16,44 @@ function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "  [!] $msg" -ForegroundColor Yellow }
 
-# Streamed download using Invoke-WebRequest (built-in PowerShell cmdlet).
+# Streamed download with progress bar.
 function Save-File($url, $path, $activity) {
+    $client = $null
     try {
         Write-Host "  $url"
-        $response = Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -TimeoutSec 180
-        # If we get here the download succeeded
+        $client = New-Object System.Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromSeconds(180)
+        $response = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        if (-not $response.IsSuccessStatusCode) { throw "HTTP $([int]$response.StatusCode)" }
+
+        $total = $response.Content.Headers.ContentLength
+        $source = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+        $target = [System.IO.File]::Create($path)
+        $buffer = New-Object byte[] 81920
+        $received = 0L
+        $lastPercent = -1
+
+        while (($read = $source.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $target.Write($buffer, 0, $read)
+            $received += $read
+            if ($total -gt 0) {
+                $percent = [int]($received * 100 / $total)
+                if ($percent -ne $lastPercent) {
+                    $lastPercent = $percent
+                    $status = '{0}%  ({1:N1} MB / {2:N1} MB)' -f $percent, ($received / 1MB), ($total / 1MB)
+                    Write-Progress -Activity $activity -Status $status -PercentComplete $percent
+                }
+            }
+        }
+
+        $target.Dispose()
+        $source.Dispose()
+        $response.Dispose()
         return $true
     }
-    catch {
-        Write-Host "  [!] $_"
-        return $false
+    finally {
+        Write-Progress -Activity $activity -Completed -ErrorAction SilentlyContinue
+        if ($client) { $client.Dispose() }
     }
 }
 
@@ -35,21 +62,30 @@ function Save-File($url, $path, $activity) {
 $version = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { Get-LatestVersion }
 if (-not $version) { throw 'Could not resolve the latest release version.' }
 
-function Test-Url($url) {
-    try {
-        $r = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-        $r.Dispose()
-        return $true
-    } catch { return $false }
-}
-
 function Get-LatestDownloadUrl($version) {
     $zipName = "SETBoard-v${version}-win-x64.zip"
 
-    # gh-proxy mirror (fast in China).
+    # Try gh-proxy mirror first (fast in China).
     $url = "https://gh-proxy.com/github.com/RejTech/SETBoard/releases/download/v$version/$zipName"
-    Write-Ok "Using gh-proxy mirror for: $zipName"
-    return $url
+    try {
+        $client = New-Object System.Net.Http.HttpClient
+        $r = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        if ($r.IsSuccessStatusCode) { $r.Dispose(); $client.Dispose(); return $url }
+        $r.Dispose(); $client.Dispose()
+    } catch { }
+
+    # Try jsDelivr mirror.
+    $url = "https://cdn.jsdelivr.net/gh/RejTech/SETBoard@v$version/$zipName"
+    try {
+        $client = New-Object System.Net.Http.HttpClient
+        $r = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        if ($r.IsSuccessStatusCode) { $r.Dispose(); $client.Dispose(); return $url }
+        $r.Dispose(); $client.Dispose()
+    } catch { }
+
+    # Fallback to GitHub direct.
+    Write-Warn "Using GitHub direct download for: $zipName"
+    return "https://github.com/RejTech/SETBoard/releases/download/v$version/$zipName"
 }
 
 try {
