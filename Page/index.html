@@ -5,20 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SETBoard — 把黑板装进触摸屏</title>
 <meta name="description" content="SETBoard 是为电子白板与触控一体机开发的轻量教学白板：压感笔锋、桌面批注、函数图像、三维几何与分页导出，落笔就跟手。" />
-<meta name="theme-color" content="#0A171F" />
+<meta name="theme-color" content="#FAFAF9" />
 <style>
   :root{
-    --bg:#0A171F;
-    --bg-deep:#071219;
-    --surface:#12232E;
-    --line:rgba(255,255,255,.085);
-    --text:#F2F6F9;
-    --muted:#8FA6B4;
-    --dim:#5F7684;
-    --accent:#FFD54A;
-    --radius:14px;
+    --bg:#FAFAF9;
+    --bg-alt:#F5F4F0;
+    --surface:#FFFFFF;
+    --line:rgba(0,0,0,.08);
+    --text:#1A1A1A;
+    --muted:#6B7280;
+    --dim:#9CA3AF;
+    --accent:#FF6B35;
+    --accent-hover:#E85A28;
+    --blue:#2563EB;
+    --green:#16A34A;
+    --radius:16px;
     --pad:clamp(20px,5vw,72px);
     --ease:cubic-bezier(.22,.61,.36,1);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+    --shadow-md:0 4px 12px rgba(0,0,0,.07),0 2px 6px rgba(0,0,0,.04);
+    --shadow-lg:0 12px 36px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.04);
   }
 
   *{box-sizing:border-box}
@@ -32,147 +38,147 @@
     overflow-x:hidden;
   }
   a{color:inherit;text-decoration:none}
-  ::selection{background:var(--accent);color:#12180f}
+  ::selection{background:var(--accent);color:#fff}
 
   .mono{
     font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
     font-variant-numeric:tabular-nums;
   }
 
-  /* 环境光：黑板的轻微反光，避免纯色死板 */
-  .ambient{
-    position:fixed;inset:0;z-index:0;pointer-events:none;
-    background:
-      radial-gradient(120% 70% at 78% -10%, rgba(58,96,112,.34), transparent 60%),
-      radial-gradient(90% 60% at 6% 108%, rgba(30,62,78,.42), transparent 62%);
-  }
-  .grain{
-    position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.35;
-    background-image:radial-gradient(rgba(255,255,255,.055) 1px, transparent 1px);
-    background-size:26px 26px;
-    mask-image:linear-gradient(180deg, rgba(0,0,0,.9), transparent 85%);
-  }
-
-  /* ---------- 顶栏（覆盖在首屏之上，不占额外高度） ---------- */
+  /* ---------- 顶栏 ---------- */
   .topbar{
     position:fixed;top:0;left:0;right:0;z-index:20;
     display:flex;align-items:center;gap:28px;
-    padding:22px var(--pad);
-    transition:background .35s var(--ease), backdrop-filter .35s var(--ease), border-color .35s var(--ease);
+    padding:20px var(--pad);
+    transition:background .4s var(--ease), backdrop-filter .4s var(--ease), border-color .4s var(--ease), box-shadow .4s var(--ease);
     border-bottom:1px solid transparent;
   }
   .topbar.is-stuck{
-    background:rgba(9,20,27,.82);
-    backdrop-filter:blur(14px);
+    background:rgba(250,250,249,.85);
+    backdrop-filter:blur(16px);
     border-bottom-color:var(--line);
+    box-shadow:var(--shadow-sm);
     padding-top:14px;padding-bottom:14px;
   }
-  .brand{display:flex;align-items:baseline;gap:10px;font-weight:650;letter-spacing:-.01em;font-size:17px}
+  .brand{display:flex;align-items:baseline;gap:10px;font-weight:700;letter-spacing:-.02em;font-size:17px}
   .brand span{font-size:11px;font-weight:400;letter-spacing:.16em;color:var(--dim)}
-  .topnav{display:flex;gap:26px;margin-left:auto;font-size:13px;color:var(--muted)}
+  .topnav{display:flex;gap:28px;margin-left:auto;font-size:13.5px;color:var(--muted)}
   .topnav a{position:relative;padding:4px 0;transition:color .25s}
   .topnav a::after{
-    content:"";position:absolute;left:0;bottom:0;height:1px;width:100%;
-    background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ease);
+    content:"";position:absolute;left:0;bottom:0;height:1.5px;width:100%;
+    background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .4s var(--ease);
   }
   .topnav a:hover{color:var(--text)}
   .topnav a:hover::after{transform:scaleX(1)}
 
   .btn{
     display:inline-flex;align-items:center;justify-content:center;gap:8px;
-    height:46px;padding:0 22px;border-radius:999px;
-    font-size:14px;font-weight:550;letter-spacing:.01em;
-    border:1px solid transparent;cursor:pointer;
-    transition:transform .3s var(--ease), background .3s, border-color .3s, color .3s;
+    height:48px;padding:0 24px;border-radius:999px;
+    font-size:14.5px;font-weight:600;letter-spacing:.01em;
+    border:1.5px solid transparent;cursor:pointer;
+    transition:transform .35s var(--ease), box-shadow .35s var(--ease), background .3s, border-color .3s, color .3s;
   }
-  .btn:active{transform:scale(.98)}
-  .btn-primary{background:var(--accent);color:#141a10}
-  .btn-primary:hover{background:#ffe27a;transform:translateY(-1px)}
-  .btn-line{border-color:rgba(255,255,255,.22);color:var(--text)}
-  .btn-line:hover{border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.05)}
-  .btn-sm{height:36px;padding:0 16px;font-size:12.5px;font-weight:500;border-color:rgba(255,255,255,.16);color:var(--muted)}
-  .btn-sm:hover{border-color:rgba(255,255,255,.38);color:var(--text)}
+  .btn:active{transform:scale(.97)}
+  .btn-primary{background:var(--accent);color:#fff;border:none}
+  .btn-primary:hover{background:var(--accent-hover);box-shadow:0 6px 24px rgba(255,107,53,.28);transform:translateY(-2px)}
+  .btn-line{border-color:rgba(0,0,0,.15);color:var(--text)}
+  .btn-line:hover{border-color:var(--accent);color:var(--accent);background:rgba(255,107,53,.04)}
+  .btn-sm{height:38px;padding:0 16px;font-size:13px;font-weight:550;border-color:rgba(0,0,0,.1);color:var(--muted)}
+  .btn-sm:hover{border-color:var(--accent);color:var(--accent)}
   .btn-replay{background:transparent;border-color:transparent;color:var(--dim);padding:0 12px}
-  .btn-replay svg{width:15px;height:15px;flex:none}
-  .btn-replay:hover{color:var(--text);background:rgba(255,255,255,.05)}
+  .btn-replay svg{width:15px;height:15px;flex:none;transition:transform .4s var(--ease)}
+  .btn-replay:hover{color:var(--text);background:rgba(0,0,0,.04)}
+  .btn-replay:hover svg{transform:rotate(-180deg)}
 
-  /* ---------- 首屏：文字压住画面左侧，板面出血到右边 ---------- */
+  /* ---------- 首屏 ---------- */
   .hero{
     position:relative;z-index:2;
     min-height:100svh;
     display:flex;align-items:center;
     padding:120px var(--pad) 64px;
     isolation:isolate;
+    overflow:hidden;
   }
   .hero-copy{max-width:620px;position:relative;z-index:2}
-  .eyebrow{
-    margin:0 0 26px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;
-    color:var(--accent);display:flex;align-items:center;gap:12px;
+
+  /* 背景装饰：渐变光晕 */
+  .hero::before{
+    content:"";position:absolute;top:-30%;right:-10%;width:70vw;height:70vw;
+    background:radial-gradient(circle, rgba(255,107,53,.06) 0%, transparent 65%);
+    pointer-events:none;z-index:0;
   }
-  .eyebrow::before{content:"";width:34px;height:1px;background:currentColor;opacity:.7}
+  .hero::after{
+    content:"";position:absolute;bottom:-20%;left:-5%;width:50vw;height:50vw;
+    background:radial-gradient(circle, rgba(37,99,235,.05) 0%, transparent 60%);
+    pointer-events:none;z-index:0;
+  }
+
+  .eyebrow{
+    margin:0 0 28px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);display:flex;align-items:center;gap:12px;font-weight:600;
+  }
+  .eyebrow::before{content:"";width:34px;height:1.5px;background:currentColor;opacity:.7}
 
   h1{
     margin:0;
     font-size:clamp(2.9rem,6.6vw,5.6rem);
-    line-height:1.02;
+    line-height:1.08;
     letter-spacing:-.035em;
-    font-weight:700;
+    font-weight:800;
+    color:var(--text);
   }
   h1 em{font-style:normal;position:relative;white-space:nowrap}
   h1 em::after{
     content:"";position:absolute;left:-.04em;right:-.04em;bottom:.06em;height:.34em;
-    background:var(--accent);opacity:.92;z-index:-1;border-radius:2px;
+    background:var(--accent);opacity:.85;z-index:-1;border-radius:2px;
     transform:scaleX(0);transform-origin:left;
-    animation:sweep 1.1s var(--ease) .85s forwards;
+    animation:sweep 1.1s var(--ease) .9s forwards;
   }
   @keyframes sweep{to{transform:scaleX(1)}}
 
   .lede{
-    margin:28px 0 0;max-width:44ch;
-    font-size:clamp(15px,1.35vw,17px);line-height:1.75;color:var(--muted);
+    margin:30px 0 0;max-width:46ch;
+    font-size:clamp(15px,1.35vw,17px);line-height:1.8;color:var(--muted);
   }
-  .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:38px}
+  .actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:40px}
   .meta{margin:26px 0 0;font-size:12px;color:var(--dim);letter-spacing:.04em}
 
-  /* 一键安装：PowerShell 命令卡片 */
+  /* 一键安装命令卡片 */
   .quick-install{
-    margin-top:30px;max-width:580px;
+    margin-top:32px;max-width:580px;
     border:1px solid var(--line);border-radius:var(--radius);
-    background:rgba(13,28,37,.72);backdrop-filter:blur(8px);
-    padding:16px 18px;
+    background:var(--surface);padding:16px 18px;box-shadow:var(--shadow-sm);
+    transition:box-shadow .3s var(--ease), transform .3s var(--ease);
   }
+  .quick-install:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
   .quick-install-head{
     display:flex;align-items:center;gap:8px;margin-bottom:10px;
-    font-size:12px;letter-spacing:.14em;color:var(--muted);
+    font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:500;
   }
-  .qi-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(255,213,74,.6)}
+  .qi-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(255,107,53,.4)}
   .quick-install-cmd{display:flex;align-items:center;gap:10px}
   .quick-install-cmd code{
     flex:1;min-width:0;overflow-x:auto;white-space:nowrap;
-    font-size:13px;color:#FFE9A8;background:#0B1A23;
-    border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:11px 13px;
+    font-size:13px;color:#D97706;background:var(--bg-alt);
+    border:1px solid var(--line);border-radius:9px;padding:11px 13px;font-weight:500;
   }
   .qi-copy{
     flex:none;height:38px;padding:0 16px;border-radius:9px;cursor:pointer;
-    border:1px solid rgba(255,255,255,.18);background:transparent;color:var(--text);
-    font-size:12.5px;transition:border-color .25s,color .25s;
+    border:1px solid rgba(0,0,0,.12);background:var(--surface);color:var(--text);
+    font-size:12.5px;font-weight:550;transition:border-color .25s,color .25s,background .25s;
   }
   .qi-copy:hover{border-color:var(--accent);color:var(--accent)}
-  .quick-install-note{margin:10px 0 0;font-size:12px;color:var(--dim);line-height:1.7}
-  .quick-install-note a{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
-  .quick-install-note a:hover{color:var(--accent)}
 
-  /* 一键安装引导弹层 */
+  /* 安装引导弹层 */
   .install-guide{
     position:fixed;inset:0;z-index:60;display:none;
     align-items:center;justify-content:center;padding:24px;
-    background:rgba(4,12,17,.72);backdrop-filter:blur(6px);
+    background:rgba(250,250,249,.7);backdrop-filter:blur(8px);
   }
   .install-guide.open{display:flex}
   .guide-card{
     width:min(520px,100%);border:1px solid var(--line);border-radius:18px;
-    background:var(--surface);padding:28px 28px 24px;
-    box-shadow:0 30px 80px rgba(0,0,0,.5);
+    background:var(--surface);padding:28px 28px 24px;box-shadow:var(--shadow-lg);
   }
   .guide-card h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
   .guide-card .guide-sub{margin:0 0 18px;font-size:13px;color:var(--muted);line-height:1.7}
@@ -183,33 +189,31 @@
   }
   .guide-steps li::before{
     content:counter(step);position:absolute;left:0;top:12px;
-    width:24px;height:24px;border-radius:50%;background:rgba(255,213,74,.14);
-    color:var(--accent);font-size:12px;display:flex;align-items:center;justify-content:center;
-    font-family:ui-monospace,Consolas,monospace;
+    width:24px;height:24px;border-radius:50%;background:rgba(255,107,53,.1);
+    color:var(--accent);font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:600;
   }
   .guide-steps code{
-    background:#0B1A23;border:1px solid rgba(255,255,255,.08);border-radius:5px;
-    padding:1px 6px;font-size:12px;color:#FFE9A8;
+    background:var(--bg-alt);border:1px solid var(--line);border-radius:5px;
+    padding:1px 6px;font-size:12px;color:#D97706;font-weight:500;
   }
   .guide-cmd{
-    margin:14px 0 18px;padding:11px 13px;font-size:12.5px;color:#FFE9A8;
-    background:#0B1A23;border:1px solid rgba(255,255,255,.07);border-radius:9px;
-    overflow-x:auto;white-space:nowrap;
+    margin:14px 0 18px;padding:11px 13px;font-size:12.5px;color:#D97706;
+    background:var(--bg-alt);border:1px solid var(--line);border-radius:9px;
+    overflow-x:auto;white-space:nowrap;font-weight:500;
   }
   .guide-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 
   /* 板面 */
   .hero-visual{
     position:absolute;z-index:1;
-    right:0;
-    top:50%;transform:translateY(-50%);
-    width:min(66vw,1040px);
-    pointer-events:none;
+    right:0;top:50%;transform:translateY(-50%);
+    width:min(66vw,1040px);pointer-events:none;
+    transition:transform .8s var(--ease);
   }
-  .board{width:100%;height:auto;display:block;filter:drop-shadow(0 40px 80px rgba(0,0,0,.55))}
-  .board .chalk{
-    fill:none;stroke:#EDF4F8;stroke-linecap:round;stroke-linejoin:round;
-  }
+  .hero-visual.is-visible{transform:translateY(-50%) translateX(0)}
+
+  .board{width:100%;height:auto;display:block;filter:drop-shadow(var(--shadow-lg))}
+  .board .chalk{fill:none;stroke:#2D3748;stroke-linecap:round;stroke-linejoin:round}
   .board .draw{stroke-dasharray:var(--len,900);stroke-dashoffset:var(--len,900);animation:draw 2.2s var(--ease) forwards}
   @keyframes draw{to{stroke-dashoffset:0}}
   .board .fade{opacity:0;animation:fadeUp 1.2s var(--ease) forwards}
@@ -221,7 +225,7 @@
   .board .point{opacity:0;transform-box:fill-box;transform-origin:center;animation:pointIn .72s var(--ease) forwards}
   @keyframes pointIn{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
 
-  /* 重播：去掉 .playing 时把首屏所有入场动画复位，加回来即重新播放 */
+  /* 重播：去掉 .playing 时复位 */
   .hero:not(.playing) .board .draw{animation:none;stroke-dashoffset:var(--len,900)}
   .hero:not(.playing) .board .fade{animation:none;opacity:0}
   .hero:not(.playing) .board .pop{animation:none;opacity:0;transform:scale(.82) translateY(8px)}
@@ -233,23 +237,28 @@
   section{position:relative;z-index:2}
   .wrap{padding:clamp(84px,12vh,150px) var(--pad)}
   .kicker{
-    margin:0 0 18px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);
+    margin:0 0 18px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:600;
   }
   h2{
-    margin:0;font-size:clamp(1.9rem,3.6vw,3.1rem);line-height:1.16;letter-spacing:-.025em;font-weight:650;max-width:22ch;
+    margin:0;font-size:clamp(1.9rem,3.6vw,3.1rem);line-height:1.18;letter-spacing:-.025em;font-weight:700;color:var(--text);max-width:22ch;
   }
   .sub{margin:20px 0 0;max-width:52ch;color:var(--muted);font-size:15.5px;line-height:1.8}
 
-  [data-reveal]{opacity:0;transform:translateY(26px);transition:opacity .85s var(--ease),transform .85s var(--ease)}
+  /* 滚动显示 */
+  [data-reveal]{opacity:0;transform:translateY(32px);transition:opacity .9s var(--ease),transform .9s var(--ease)}
   [data-reveal].is-in{opacity:1;transform:none}
+  /* 交错延迟 */
+  [data-reveal-delay="1"]{transition-delay:.1s}
+  [data-reveal-delay="2"]{transition-delay:.2s}
+  [data-reveal-delay="3"]{transition-delay:.3s}
 
   /* ---------- 笔锋 ---------- */
   .ink-stage{margin:56px 0 0}
   .ink-stroke{width:100%;height:clamp(180px,26vw,320px);display:block;overflow:visible}
-  .ink-stroke .base{fill:none;stroke:rgba(255,255,255,.06);stroke-width:2}
+  .ink-stroke .base{fill:none;stroke:rgba(0,0,0,.06);stroke-width:2}
   .ink-stroke .inkline{
-    fill:none;stroke:#EDF4F8;stroke-linecap:round;
-    stroke-dasharray:1 1; /* 由 JS 用 pathLength=1 控制 */
+    fill:none;stroke:#FF6B35;stroke-linecap:round;
+    stroke-dasharray:1 1;
     stroke-dashoffset:1;
   }
   .ink-notes{
@@ -258,21 +267,23 @@
   }
   .ink-notes div{padding:26px 26px 0 0}
   .ink-notes div + div{padding-left:26px;border-left:1px solid var(--line)}
-  .ink-notes h3{margin:0 0 8px;font-size:14px;font-weight:600;letter-spacing:.02em}
+  .ink-notes h3{margin:0 0 8px;font-size:14px;font-weight:650;letter-spacing:.02em;color:var(--text)}
   .ink-notes p{margin:0;font-size:13.5px;line-height:1.7;color:var(--muted)}
 
-  /* ---------- 课堂流程：编号行，不用卡片 ---------- */
+  /* ---------- 课堂流程 ---------- */
   .rows{margin-top:60px;border-top:1px solid var(--line)}
   .row{
     display:grid;grid-template-columns:76px minmax(0,1fr) minmax(0,1.15fr);
-    gap:24px;align-items:start;
-    padding:34px 0;border-bottom:1px solid var(--line);
+    gap:24px;align-items:start;padding:34px 0;border-bottom:1px solid var(--line);
+    transition:background .3s var(--ease), padding-left .3s var(--ease);
   }
-  .row .no{font-size:12px;color:var(--dim);letter-spacing:.1em;padding-top:6px}
-  .row h3{margin:0;font-size:clamp(19px,2vw,25px);font-weight:600;letter-spacing:-.015em}
+  .row:hover{background:rgba(255,107,53,.03);padding-left:8px}
+  .row .no{font-size:12px;color:var(--dim);letter-spacing:.1em;padding-top:6px;transition:color .3s;font-weight:600}
+  .row:hover .no{color:var(--accent)}
+  .row h3{margin:0;font-size:clamp(19px,2vw,25px);font-weight:650;letter-spacing:-.015em;color:var(--text)}
   .row p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.75;max-width:46ch}
-  .row:hover .no{color:var(--accent);transition:color .3s}
 
+  /* ---------- 功能画廊 ---------- */
   .gallery-head{display:flex;justify-content:space-between;gap:36px;align-items:end}
   .gallery-head .sub{margin-bottom:4px}
   .shot-grid{
@@ -280,35 +291,35 @@
     gap:18px;margin-top:56px;
   }
   .shot{
-    position:relative;overflow:hidden;border:1px solid var(--line);border-radius:18px;
-    background:#08151D;min-height:260px;margin:0;
+    position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--surface);min-height:260px;margin:0;
+    box-shadow:var(--shadow-sm);transition:box-shadow .4s var(--ease), transform .5s var(--ease);
   }
+  .shot:hover{box-shadow:var(--shadow-lg);transform:translateY(-4px)}
   .shot-main{grid-row:span 2;min-height:600px}
   .shot-wide{grid-column:1/-1;min-height:180px}
-  .shot img{width:100%;height:100%;display:block;object-fit:cover;transition:transform .7s var(--ease),filter .7s var(--ease)}
+  .shot img{width:100%;height:100%;display:block;object-fit:cover;transition:transform .8s var(--ease),filter .6s var(--ease)}
   .shot-main img{object-position:center}
-  .shot-wide img{object-fit:contain;padding:32px;background:#0B1A23}
-  .shot:hover img{transform:scale(1.018);filter:brightness(1.05)}
+  .shot-wide img{object-fit:contain;padding:32px;background:var(--bg-alt)}
+  .shot:hover img{transform:scale(1.025);filter:brightness(1.04)}
   .shot-copy{
     position:absolute;left:0;right:0;bottom:0;padding:68px 24px 22px;
-    background:linear-gradient(180deg,transparent,rgba(4,12,17,.94));
+    background:linear-gradient(180deg,transparent,rgba(250,250,249,.96));
   }
-  .shot-copy h3{margin:0 0 6px;font-size:18px;font-weight:600}
-  .shot-copy p{margin:0;color:#A9BCC8;font-size:13px;line-height:1.65}
+  .shot-copy h3{margin:0 0 6px;font-size:18px;font-weight:650;color:var(--text)}
+  .shot-copy p{margin:0;color:var(--muted);font-size:13px;line-height:1.65}
 
   /* ---------- 规格 ---------- */
   .spec-grid{
-    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-    column-gap:64px;margin-top:56px;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:64px;margin-top:56px;
   }
   .spec-grid dl{margin:0}
   .spec-grid div{
-    display:flex;justify-content:space-between;gap:24px;
-    padding:18px 0;border-bottom:1px solid var(--line);
-    font-size:14px;
+    display:flex;justify-content:space-between;gap:24px;padding:18px 0;border-bottom:1px solid var(--line);
+    font-size:14px;transition:border-color .3s;
   }
   .spec-grid dt{color:var(--dim)}
-  .spec-grid dd{margin:0;text-align:right;color:var(--text)}
+  .spec-grid dd{margin:0;text-align:right;color:var(--text);font-weight:550}
 
   /* ---------- 开源许可 ---------- */
   .license-copy{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(240px,.65fr);gap:64px;align-items:end}
@@ -319,7 +330,7 @@
   .final{
     padding:clamp(90px,14vh,170px) var(--pad);
     border-top:1px solid var(--line);
-    background:linear-gradient(180deg, rgba(255,213,74,.045), transparent 70%);
+    background:linear-gradient(180deg, rgba(255,107,53,.04), transparent 60%);
   }
   .final h2{max-width:24ch}
   .final .actions{margin-top:36px}
@@ -334,7 +345,7 @@
 
   /* ---------- 响应式 ---------- */
   @media (max-width:1080px){
-    .hero-visual{width:82vw;opacity:.5}
+    .hero-visual{width:82vw;opacity:.6}
     .hero-copy{max-width:560px}
   }
   @media (max-width:860px){
@@ -364,8 +375,6 @@
 </style>
 </head>
 <body id="top">
-<div class="ambient" aria-hidden="true"></div>
-<div class="grain" aria-hidden="true"></div>
 
 <header class="topbar" id="topbar">
   <a class="brand" href="#top">SETBoard <span>迅教白板</span></a>
@@ -406,36 +415,36 @@
           <code class="mono" id="installCmd">irm https://rejtech.github.io/SETBoard/install.ps1 | iex</code>
           <button class="qi-copy" type="button" id="copyInstall">复制</button>
         </div>
-        <p class="quick-install-note">在 PowerShell 中粘贴运行：自动安装 .NET 9 SDK，优先从 Gitee 下载源码并本地构建，创建桌面快捷方式与浮窗态开机自启。也可以 <a href="install.ps1" download="install.ps1">下载 install.ps1</a>，右键「使用 PowerShell 运行」。</p>
+        <p class="quick-install-note" style="margin:10px 0 0;font-size:12px;color:var(--muted);line-height:1.7">在 PowerShell 中粘贴运行：自动安装 .NET 9 SDK，优先从 Gitee 下载源码并本地构建，创建桌面快捷方式与浮窗态开机自启。也可以 <a href="install.ps1" download="install.ps1" style="color:var(--accent);text-decoration:underline;text-underline-offset:3px">下载 install.ps1</a>，右键「使用 PowerShell 运行」。</p>
       </div>
     </div>
 
-    <!-- 板面：全部用矢量绘制，不依赖截图 -->
-    <div class="hero-visual">
+    <!-- 板面 -->
+    <div class="hero-visual" id="heroVisual">
       <svg class="board" viewBox="0 0 1180 760" role="img" aria-label="SETBoard 白板界面的示意：点阵板面、手写公式、高亮笔迹与底部工具栏">
         <defs>
           <pattern id="dots" width="34" height="34" patternUnits="userSpaceOnUse">
-            <circle cx="2" cy="2" r="1.5" fill="#3B5765" opacity=".55" />
+            <circle cx="2" cy="2" r="1.5" fill="#D0D5DB" opacity=".45" />
           </pattern>
           <linearGradient id="boardBg" x1="0" y1="0" x2="0.4" y2="1">
-            <stop offset="0" stop-color="#142C39" />
-            <stop offset=".55" stop-color="#0F232E" />
-            <stop offset="1" stop-color="#0B1A23" />
+            <stop offset="0" stop-color="#FFFFFF" />
+            <stop offset=".55" stop-color="#FAFBFC" />
+            <stop offset="1" stop-color="#F5F6F8" />
           </linearGradient>
           <linearGradient id="glassBar" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#243441" stop-opacity=".96" />
-            <stop offset="1" stop-color="#111B25" stop-opacity=".96" />
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".92" />
+            <stop offset="1" stop-color="#F5F6F8" stop-opacity=".92" />
           </linearGradient>
         </defs>
 
         <rect x="0" y="0" width="1180" height="760" rx="26" fill="url(#boardBg)" />
         <rect x="0" y="0" width="1180" height="760" rx="26" fill="url(#dots)" />
-        <rect x="9" y="9" width="1162" height="742" rx="20" fill="none" stroke="#2E4A59" stroke-width="1.4" />
+        <rect x="9" y="9" width="1162" height="742" rx="20" fill="none" stroke="#D0D5DB" stroke-width="1.4" />
 
-        <!-- 高亮笔（半透明黄），压在文字下方 -->
-        <path d="M150 300 L520 292" stroke="#FFD54A" stroke-width="46" stroke-linecap="round" opacity=".22" />
+        <!-- 高亮笔 -->
+        <path d="M150 300 L520 292" stroke="#FBBF24" stroke-width="46" stroke-linecap="round" opacity=".2" />
 
-        <!-- 手写公式：标题后首先出现，建立核心视觉 -->
+        <!-- 手写公式 -->
         <g class="chalk" stroke-width="5.5">
           <path class="draw" style="--len:520;animation-delay:.15s" pathLength="520" d="M150 300 c 10 -34 26 -50 34 -18 c 7 27 -12 62 6 62 c 15 0 22 -32 32 -30 c 10 2 4 30 16 30" />
           <path class="draw" style="--len:60;animation-delay:.55s" pathLength="60" d="M256 286 l 22 -1" />
@@ -443,59 +452,58 @@
           <path class="draw" style="--len:120;animation-delay:.95s" pathLength="120" d="M392 300 l 0 -34 l 26 0 l -26 34 l 26 0" />
         </g>
 
-        <!-- 函数图像：坐标轴 → 曲线 → 交点，按逻辑顺序 -->
+        <!-- 函数图像 -->
         <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-          <path class="draw" style="--len:420;animation-delay:1.1s" pathLength="420" d="M602 468 L 866 468" stroke="#718793" stroke-width="2.2" />
-          <path class="draw" style="--len:360;animation-delay:1.18s" pathLength="360" d="M674 524 L 674 324" stroke="#718793" stroke-width="2.2" />
-          <path class="draw" style="--len:640;animation-delay:1.3s" pathLength="640" d="M608 512 C650 484 714 442 856 354" stroke="#4DABF7" stroke-width="4" />
-          <path class="draw" style="--len:700;animation-delay:1.45s" pathLength="700" d="M610 338 C650 456 702 512 770 448 C810 410 842 332 866 276" stroke="#FF6B6B" stroke-width="4" />
-          <circle class="point" style="animation-delay:2.05s" cx="653" cy="482" r="6" fill="#FFD54A" stroke="#FFFFFF" stroke-width="2" />
-          <circle class="point" style="animation-delay:2.18s" cx="786" cy="397" r="6" fill="#FFD54A" stroke="#FFFFFF" stroke-width="2" />
+          <path class="draw" style="--len:420;animation-delay:1.1s" pathLength="420" d="M602 468 L 866 468" stroke="#9CA3AF" stroke-width="2.2" />
+          <path class="draw" style="--len:360;animation-delay:1.18s" pathLength="360" d="M674 524 L 674 324" stroke="#9CA3AF" stroke-width="2.2" />
+          <path class="draw" style="--len:640;animation-delay:1.3s" pathLength="640" d="M608 512 C650 484 714 442 856 354" stroke="#3B82F6" stroke-width="4" />
+          <path class="draw" style="--len:700;animation-delay:1.45s" pathLength="700" d="M610 338 C650 456 702 512 770 448 C810 410 842 332 866 276" stroke="#EF4444" stroke-width="4" />
+          <circle class="point" style="animation-delay:2.05s" cx="653" cy="482" r="6" fill="#FBBF24" stroke="#FFFFFF" stroke-width="2" />
+          <circle class="point" style="animation-delay:2.18s" cx="786" cy="397" r="6" fill="#FBBF24" stroke="#FFFFFF" stroke-width="2" />
         </g>
 
-        <!-- 三维几何：先立方体 → 再圆柱，隐藏棱在实线之后 -->
-        <g fill="none" stroke="#EDF4F8" stroke-width="3.2" stroke-linejoin="round">
+        <!-- 三维几何 -->
+        <g fill="none" stroke="#374151" stroke-width="3.2" stroke-linejoin="round">
           <path class="draw" style="--len:680;animation-delay:1.6s" pathLength="680" d="M915 252 L988 274 L988 350 L915 330 Z M915 252 L946 224 L1018 245 L988 274 M1018 245 L1018 320 L988 350" />
-          <path class="draw" style="--len:300;animation-delay:1.85s" pathLength="300" d="M946 224 L946 300 L915 330 M946 300 L1018 320" stroke="#8FA1AC" stroke-dasharray="9 9" />
+          <path class="draw" style="--len:300;animation-delay:1.85s" pathLength="300" d="M946 224 L946 300 L915 330 M946 300 L1018 320" stroke="#9CA3AF" stroke-dasharray="9 9" />
         </g>
-        <g fill="none" stroke="#EDF4F8" stroke-width="3">
+        <g fill="none" stroke="#374151" stroke-width="3">
           <path class="draw" style="--len:300;animation-delay:1.95s" pathLength="300" d="M1038 390 C1038 370 1122 370 1122 390 C1122 410 1038 410 1038 390Z" />
           <path class="draw" style="--len:360;animation-delay:2.08s" pathLength="360" d="M1038 390 V460 C1038 480 1122 480 1122 460 V390" />
-          <path class="draw" style="--len:180;animation-delay:2.3s" pathLength="180" d="M1038 460 C1038 440 1122 440 1122 460" stroke="#8FA1AC" stroke-dasharray="8 8" />
+          <path class="draw" style="--len:180;animation-delay:2.3s" pathLength="180" d="M1038 460 C1038 440 1122 440 1122 460" stroke="#9CA3AF" stroke-dasharray="8 8" />
         </g>
 
-        <!-- 手绘填色：先填色块，再描边轮廓 -->
-        <path class="fill-in" style="--fill-opacity:.7;animation-delay:2.2s" d="M934 490 C969 462 1028 468 1044 510 C1058 547 1018 578 970 564 C930 552 910 518 934 490Z" fill="#51CF66" />
-        <path class="draw" style="--len:520;animation-delay:2.35s" pathLength="520" d="M934 490 C969 462 1028 468 1044 510 C1058 547 1018 578 970 564 C930 552 910 518 934 490Z" fill="none" stroke="#EDF4F8" stroke-width="4" stroke-linecap="round" />
+        <!-- 手绘填色 -->
+        <path class="fill-in" style="--fill-opacity:.7;animation-delay:2.2s" d="M934 490 C969 462 1028 468 1044 510 C1058 547 1018 578 970 564 C930 552 910 518 934 490Z" fill="#4ADE80" />
+        <path class="draw" style="--len:520;animation-delay:2.35s" pathLength="520" d="M934 490 C969 462 1028 468 1044 510 C1058 547 1018 578 970 564 C930 552 910 518 934 490Z" fill="none" stroke="#374151" stroke-width="4" stroke-linecap="round" />
 
-        <!-- 图片对象：选中框 → 填充 → 内容图 → 缩放框 → 手柄 -->
+        <!-- 图片对象 -->
         <g>
-          <path class="draw" style="--len:460;animation-delay:2.45s" pathLength="460" d="M397 414 H523 V518 H397Z" fill="none" stroke="#DCE8EE" stroke-width="3" />
-          <path class="fill-in" style="--fill-opacity:.92;animation-delay:2.55s" d="M400 417H520V515H400Z" fill="#DCE8EE" />
-          <path class="draw" style="--len:300;animation-delay:2.65s" pathLength="300" d="M413 492 L443 454 L464 475 L482 449 L508 492Z" fill="none" stroke="#4DABF7" stroke-width="5" stroke-linejoin="round" />
-          <circle class="point" style="animation-delay:2.8s" cx="490" cy="438" r="10" fill="#FFD54A" />
-          <path class="draw" style="--len:520;animation-delay:2.75s" pathLength="520" d="M389 406 H531 V526 H389Z" fill="none" stroke="#62B7E4" stroke-width="2" stroke-dasharray="7 6" />
-          <rect class="point" style="animation-delay:2.95s" x="523" y="518" width="14" height="14" rx="3" fill="#9DDCFF" stroke="#FFFFFF" stroke-width="2" />
+          <path class="draw" style="--len:460;animation-delay:2.45s" pathLength="460" d="M397 414 H523 V518 H397Z" fill="none" stroke="#DDE8EE" stroke-width="3" />
+          <path class="fill-in" style="--fill-opacity:.92;animation-delay:2.55s" d="M400 417H520V515H400Z" fill="#E5F6FF" />
+          <path class="draw" style="--len:300;animation-delay:2.65s" pathLength="300" d="M413 492 L443 454 L464 475 L482 449 L508 492Z" fill="none" stroke="#3B82F6" stroke-width="5" stroke-linejoin="round" />
+          <circle class="point" style="animation-delay:2.8s" cx="490" cy="438" r="10" fill="#FBBF24" />
+          <path class="draw" style="--len:520;animation-delay:2.75s" pathLength="520" d="M389 406 H531 V526 H389Z" fill="none" stroke="#60A5FA" stroke-width="2" stroke-dasharray="7 6" />
+          <rect class="point" style="animation-delay:2.95s" x="523" y="518" width="14" height="14" rx="3" fill="#93C5FD" stroke="#FFFFFF" stroke-width="2" />
         </g>
 
-        <!-- 侧边荧光标记：在主要内容完成后点缀 -->
-        <path class="draw" style="--len:180;animation-delay:2.5s" pathLength="180"
-              d="M150 560 c 70 -12 128 -10 190 6" fill="none" stroke="#51CF66" stroke-width="6" stroke-linecap="round" opacity=".75" />
+        <!-- 侧边荧光标记 -->
+        <path class="draw" style="--len:180;animation-delay:2.5s" pathLength="180" d="M150 560 c 70 -12 128 -10 190 6" fill="none" stroke="#4ADE80" stroke-width="6" stroke-linecap="round" opacity=".7" />
 
-        <!-- 底部工具栏：最后出现，收尾 -->
+        <!-- 底部工具栏 -->
         <g class="fade" style="animation-delay:.6s">
-          <rect x="300" y="626" width="580" height="86" rx="43" fill="url(#glassBar)" stroke="#3A5566" />
+          <rect x="300" y="626" width="580" height="86" rx="43" fill="url(#glassBar)" stroke="#D0D5DB" />
           <g fill="#DDE8EF" opacity=".92">
-            <rect x="330" y="648" width="42" height="42" rx="12" fill="#FFD54A" />
-            <rect x="390" y="648" width="42" height="42" rx="12" fill="#2C4352" />
-            <rect x="450" y="648" width="42" height="42" rx="12" fill="#2C4352" />
-            <rect x="510" y="648" width="42" height="42" rx="12" fill="#2C4352" />
-            <rect x="570" y="648" width="42" height="42" rx="12" fill="#2C4352" />
+            <rect x="330" y="648" width="42" height="42" rx="12" fill="#FBBF24" />
+            <rect x="390" y="648" width="42" height="42" rx="12" fill="#E5E7EB" />
+            <rect x="450" y="648" width="42" height="42" rx="12" fill="#E5E7EB" />
+            <rect x="510" y="648" width="42" height="42" rx="12" fill="#E5E7EB" />
+            <rect x="570" y="648" width="42" height="42" rx="12" fill="#E5E7EB" />
           </g>
-          <circle cx="600" cy="669" r="6" fill="#0F232E" />
-          <rect x="640" y="650" width="180" height="8" rx="4" fill="#2C4352" />
-          <circle cx="760" cy="669" r="9" fill="#FFD54A" />
-          <rect x="838" y="659" width="26" height="20" rx="6" fill="#2C4352" />
+          <circle cx="600" cy="669" r="6" fill="#F5F6F8" />
+          <rect x="640" y="650" width="180" height="8" rx="4" fill="#E5E7EB" />
+          <circle cx="760" cy="669" r="9" fill="#FBBF24" />
+          <rect x="838" y="659" width="26" height="20" rx="6" fill="#E5E7EB" />
         </g>
       </svg>
     </div>
@@ -516,18 +524,9 @@
       </div>
 
       <div class="ink-notes">
-        <div data-reveal>
-          <h3>压感 × 笔速</h3>
-          <p>按压力与移动速度共同决定半宽，快写自然变细，慢写更饱满。</p>
-        </div>
-        <div data-reveal>
-          <h3>收锋与限速</h3>
-          <p>相邻半径变化做斜率限制，端头渐变收锋，避免出现枣核或断口。</p>
-        </div>
-        <div data-reveal>
-          <h3>曲线加密</h3>
-          <p>采样点之间补曲线，粗细随笔宽自适应，粗笔稀、细笔密。</p>
-        </div>
+        <div data-reveal data-reveal-delay="1"><h3>压感 × 笔速</h3><p>按压力与移动速度共同决定半宽，快写自然变细，慢写更饱满。</p></div>
+        <div data-reveal data-reveal-delay="2"><h3>收锋与限速</h3><p>相邻半径变化做斜率限制，端头渐变收锋，避免出现枣核或断口。</p></div>
+        <div data-reveal data-reveal-delay="3"><h3>曲线加密</h3><p>采样点之间补曲线，粗细随笔宽自适应，粗笔稀、细笔密。</p></div>
       </div>
     </div>
   </section>
@@ -543,34 +542,10 @@
       </div>
 
       <div class="shot-grid">
-        <figure class="shot shot-main" data-reveal>
-          <img src="assets/screenshots/solids.png" alt="正方体、长方体、四棱锥、圆柱、圆锥和球的三维几何展示" loading="lazy" />
-          <figcaption class="shot-copy">
-            <h3>教材式三维几何</h3>
-            <p>六种常用立体图形，可见棱实线、隐藏棱虚线；拖动旋转视角，对单个面填色，并可通过右下角手柄整体缩放。</p>
-          </figcaption>
-        </figure>
-        <figure class="shot" data-reveal>
-          <img src="assets/screenshots/functions.png" alt="两条函数曲线及自动标注的交点坐标" loading="lazy" />
-          <figcaption class="shot-copy">
-            <h3>多曲线与交点坐标</h3>
-            <p>LaTeX 输入、多色叠加、参数滑块和函数预设；交点自动求解并标注坐标，缩放不牺牲数学精度。</p>
-          </figcaption>
-        </figure>
-        <figure class="shot" data-reveal>
-          <img src="assets/screenshots/fill-ink.png" alt="手绘闭合圆形区域被填充，旁边未闭合线条不填充" loading="lazy" />
-          <figcaption class="shot-copy">
-            <h3>手绘闭合区域填色</h3>
-            <p>点击笔画围成的区域即可上色；未闭合区域不会误填，颜色始终垫在线条下方。</p>
-          </figcaption>
-        </figure>
-        <figure class="shot shot-wide" data-reveal>
-          <img src="assets/screenshots/toolbar.png" alt="形状选择、十种快捷颜色、自定义颜色和粗细滑块组成的工具选项栏" loading="lazy" />
-          <figcaption class="shot-copy">
-            <h3>十色快捷板，也保留自定义色</h3>
-            <p>常用颜色一触即达，末尾的加号可输入十六进制颜色；粗细滑块与实时预览放在同一栏。</p>
-          </figcaption>
-        </figure>
+        <figure class="shot shot-main" data-reveal><img src="assets/screenshots/solids.png" alt="正方体、长方体、四棱锥、圆柱、圆锥和球的三维几何展示" loading="lazy" /><figcaption class="shot-copy"><h3>教材式三维几何</h3><p>六种常用立体图形，可见棱实线、隐藏棱虚线；拖动旋转视角，对单个面填色，并可通过右下角手柄整体缩放。</p></figcaption></figure>
+        <figure class="shot" data-reveal><img src="assets/screenshots/functions.png" alt="两条函数曲线及自动标注的交点坐标" loading="lazy" /><figcaption class="shot-copy"><h3>多曲线与交点坐标</h3><p>LaTeX 输入、多色叠加、参数滑块和函数预设；交点自动求解并标注坐标，缩放不牺牲数学精度。</p></figcaption></figure>
+        <figure class="shot" data-reveal><img src="assets/screenshots/fill-ink.png" alt="手绘闭合圆形区域被填充，旁边未闭合线条不填充" loading="lazy" /><figcaption class="shot-copy"><h3>手绘闭合区域填色</h3><p>点击笔画围成的区域即可上色；未闭合区域不会误填，颜色始终垫在线条下方。</p></figcaption></figure>
+        <figure class="shot shot-wide" data-reveal><img src="assets/screenshots/toolbar.png" alt="形状选择、十种快捷颜色、自定义颜色和粗细滑块组成的工具选项栏" loading="lazy" /><figcaption class="shot-copy"><h3>十色快捷板，也保留自定义色</h3><p>常用颜色一触即达，末尾的加号可输入十六进制颜色；粗细滑块与实时预览放在同一栏。</p></figcaption></figure>
       </div>
     </div>
   </section>
@@ -582,15 +557,7 @@
       <h2 data-reveal>看 SETBoard 在<br>真实课堂里怎么用</h2>
       <p class="sub" data-reveal>1 分半分钟，了解落笔出墨、函数图像、三维几何与桌面批注的核心体验。</p>
       <figure class="shot shot-wide" data-reveal style="min-height:460px;margin-top:48px">
-        <video
-          src="setboard-promo-1080p60-audio.mp4"
-          controls
-          preload="metadata"
-          playsinline
-          style="width:100%;height:auto;display:block;border-radius:18px;background:#08151D"
-        >
-          您的浏览器不支持视频播放。
-        </video>
+        <video src="setboard-promo-1080p60-audio.mp4" controls preload="metadata" playsinline style="width:100%;height:auto;display:block;border-radius:var(--radius);background:#F5F6F8">您的浏览器不支持视频播放。</video>
       </figure>
     </div>
   </section>
@@ -603,26 +570,10 @@
       <p class="sub" data-reveal>讲课时随手写，讲完直接分页导出；需要讲别的内容，把白板最小化到桌面继续批注。</p>
 
       <div class="rows">
-        <div class="row" data-reveal>
-          <span class="no mono">01</span>
-          <h3>随手板书</h3>
-          <p>无限画布配合滚轮缩放、中键平移、双指捏合；点阵背景可按需开关。笔尖落下时自动屏蔽手掌与手指，手掌压在板上也不会误画。</p>
-        </div>
-        <div class="row" data-reveal>
-          <span class="no mono">02</span>
-          <h3>桌面批注</h3>
-          <p>最小化后保留浮动入口，点开即进入全屏透明批注层；图标化工具栏与二级面板和白板一致。选中「穿透」工具即可直接操作下层窗口，笔迹始终保留，再选其他工具立即恢复书写。</p>
-        </div>
-        <div class="row" data-reveal>
-          <span class="no mono">03</span>
-          <h3>分页与导出</h3>
-          <p>一节课多页白板，支持撤销重做；整页导出 PNG，或存成 .setb 文件下次继续。橡皮菜单可滑动清页，误操作仍能撤销；底栏「清空」一键重置全部页面，带确认防误触。</p>
-        </div>
-        <div class="row" data-reveal>
-          <span class="no mono">04</span>
-          <h3>PPT 模式</h3>
-          <p>检测到 PowerPoint / WPS 放映，自动收起白板进入批注并穿透；翻页时笔迹按页保存、回页恢复，下一页是全新笔迹层。屏幕两角各有圆形翻页浮钮，书写、翻页、结束放映都不用离开讲台。</p>
-        </div>
+        <div class="row" data-reveal><span class="no mono">01</span><h3>随手板书</h3><p>无限画布配合滚轮缩放、中键平移、双指捏合；点阵背景可按需开关。笔尖落下时自动屏蔽手掌或手指，手掌压在板上也不会误画。</p></div>
+        <div class="row" data-reveal><span class="no mono">02</span><h3>桌面批注</h3><p>最小化后保留浮动入口，点开即进入全屏透明批注层；图标化工具栏与二级面板和白板一致。选中「穿透」工具即可直接操作下层窗口，笔迹始终保留，再选其他工具立即恢复书写。</p></div>
+        <div class="row" data-reveal><span class="no mono">03</span><h3>分页与导出</h3><p>一节课多页白板，支持撤销重做；整页导出 PNG，或存成 .setb 文件下次继续。橡皮菜单可滑动清页，误操作仍能撤销；底栏「清空」一键重置全部页面，带确认防误触。</p></div>
+        <div class="row" data-reveal><span class="no mono">04</span><h3>PPT 模式</h3><p>检测到 PowerPoint / WPS 放映，自动收起白板进入批注并穿透；翻页时笔迹按页保存、回页恢复，下一页是全新笔迹层。屏幕两角各有圆形翻页浮钮，书写、翻页、结束放映都不用离开讲台。</p></div>
       </div>
     </div>
   </section>
@@ -634,22 +585,8 @@
       <h2 data-reveal>轻，但不简陋</h2>
 
       <div class="spec-grid">
-        <dl data-reveal>
-          <div><dt>系统</dt><dd>Windows 10 / 11</dd></div>
-          <div><dt>框架</dt><dd>Avalonia 11 · .NET 9</dd></div>
-          <div><dt>输入</dt><dd>触控笔 / 手指 / 鼠标</dd></div>
-          <div><dt>输入通道</dt><dd>Win32 WM_POINTER · WM_TOUCH 直读</dd></div>
-        </dl>
-        <dl data-reveal>
-          <div><dt>基础工具</dt><dd>移动 · 书写 · 荧光 · 橡皮 · 选择 · 填色 · 穿透</dd></div>
-          <div><dt>插入</dt><dd>5 种形状 · 函数 · 6 种三维体 · 图片</dd></div>
-          <div><dt>颜色 / 粗细</dt><dd>10 色快捷板 + 自定义色 · 1–16 级</dd></div>
-          <div><dt>对象操作</dt><dd>移动 · 等比缩放 · 三维旋转 · 单面填色</dd></div>
-          <div><dt>数学功能</dt><dd>LaTeX · 多曲线 · 5 类预设 · 交点坐标</dd></div>
-          <div><dt>PPT 联动</dt><dd>放映自动批注 · 笔迹随页 · 双角翻页浮钮</dd></div>
-          <div><dt>常驻与更新</dt><dd>单实例 · 进程互守 · 脚本化自动更新</dd></div>
-          <div><dt>文件 / 发布</dt><dd>.setb · PNG · Windows 单文件绿色版</dd></div>
-        </dl>
+        <dl data-reveal><div><dt>系统</dt><dd>Windows 10 / 11</dd></div><div><dt>框架</dt><dd>Avalonia 12 · .NET 9</dd></div><div><dt>输入</dt><dd>触控笔 / 手指 / 鼠标</dd></div><div><dt>输入通道</dt><dd>Win32 WM_POINTER · WM_TOUCH 直读</dd></div></dl>
+        <dl data-reveal><div><dt>基础工具</dt><dd>移动 · 书写 · 荧光 · 橡皮 · 选择 · 填色 · 穿透</dd></div><div><dt>插入</dt><dd>5 种形状 · 函数 · 6 种三维体 · 图片</dd></div><div><dt>颜色 / 粗细</dt><dd>10 色快捷板 + 自定义色 · 1–16 级</dd></div><div><dt>对象操作</dt><dd>移动 · 等比缩放 · 三维旋转 · 单面填色</dd></div><div><dt>数学功能</dt><dd>LaTeX · 多曲线 · 5 类预设 · 交点坐标</dd></div><div><dt>PPT 联动</dt><dd>放映自动批注 · 笔迹随页 · 双角翻页浮钮</dd></div><div><dt>常驻与更新</dt><dd>单实例 · 进程互守 · 脚本化自动更新</dd></div><div><dt>文件 / 发布</dt><dd>.setb · PNG · Windows 单文件绿色版</dd></div></dl>
       </div>
     </div>
   </section>
@@ -657,15 +594,8 @@
   <!-- 开源许可 -->
   <section id="license">
     <div class="wrap license-copy">
-      <div>
-        <p class="kicker mono" data-reveal>Open Source</p>
-        <h2 data-reveal>开放代码，<br>保留创造的自由</h2>
-        <p class="sub" data-reveal>SETBoard 仅依据 GPL-3.0 开源。你可以使用、研究、修改与分发；分发本项目或修改版本时，需要继续提供对应源码并保留版权与许可声明。许可证文件同时提供英文原文与简体中文参考译文。</p>
-      </div>
-      <div class="license-links" data-reveal>
-        <a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/blob/main/LICENSE">查看 GPLv3 中英文本</a>
-        <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">浏览源码</a>
-      </div>
+      <div><p class="kicker mono" data-reveal>Open Source</p><h2 data-reveal>开放代码，<br>保留创造的自由</h2><p class="sub" data-reveal>SETBoard 仅依据 GPL-3.0 开源。你可以使用、研究、修改与分发；分发本项目或修改版本时，需要继续提供对应源码并保留版权与许可声明。许可证文件同时提供英文原文与简体中文参考译文。</p></div>
+      <div class="license-links" data-reveal><a class="btn btn-primary" href="https://github.com/RejTech/SETBoard/blob/main/LICENSE">查看 GPLv3 中英文本</a><a class="btn btn-line" href="https://github.com/RejTech/SETBoard">浏览源码</a></div>
     </div>
   </section>
 
@@ -673,11 +603,7 @@
   <section class="final">
     <p class="kicker mono" data-reveal>Download</p>
     <h2 data-reveal>下一节课，<br>换一块好写的板子</h2>
-    <div class="actions" data-reveal>
-      <button class="btn btn-primary" type="button" data-install>一键安装</button>
-      <a class="btn btn-line" href="install.ps1" download="install.ps1">下载安装脚本</a>
-      <a class="btn btn-line" href="https://github.com/RejTech/SETBoard">GitHub 仓库</a>
-    </div>
+    <div class="actions" data-reveal><button class="btn btn-primary" type="button" data-install>一键安装</button><a class="btn btn-line" href="install.ps1" download="install.ps1">下载安装脚本</a><a class="btn btn-line" href="https://github.com/RejTech/SETBoard">GitHub 仓库</a></div>
   </section>
 </main>
 
@@ -686,22 +612,12 @@
   <span><a href="https://github.com/RejTech/SETBoard/blob/main/LICENSE">GPL-3.0-only</a> · <span class="mono">SETBoard · 教学白板</span></span>
 </footer>
 
-<!-- 一键安装引导：命令已复制，引导用户在 PowerShell 中运行 -->
+<!-- 一键安装引导 -->
 <div class="install-guide" id="installGuide" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
-  <div class="guide-card">
-    <h3 id="guideTitle">安装命令已复制</h3>
-    <p class="guide-sub">还差一步：在 PowerShell 里粘贴运行，脚本会自动完成安装。</p>
-    <ol class="guide-steps">
-      <li>按 <code>Win + R</code>，输入 <code>powershell</code> 后回车</li>
-      <li>在蓝色窗口中按 <code>Ctrl + V</code> 粘贴，再按回车</li>
-      <li>等待自动安装 .NET 9 SDK、下载源码并构建，完成后自动启动 SETBoard</li>
-    </ol>
+  <div class="guide-card"><h3 id="guideTitle">安装命令已复制</h3><p class="guide-sub">还差一步：在 PowerShell 里粘贴运行，脚本会自动完成安装。</p>
+    <ol class="guide-steps"><li>按 <code>Win + R</code>，输入 <code>powershell</code> 后回车</li><li>在蓝色窗口中按 <code>Ctrl + V</code> 粘贴，再按回车</li><li>等待自动安装 .NET 9 SDK、下载源码并构建，完成后自动启动 SETBoard</li></ol>
     <div class="guide-cmd mono" id="guideCmd">irm https://rejtech.github.io/SETBoard/install.ps1 | iex</div>
-    <div class="guide-actions">
-      <button class="btn btn-primary" type="button" id="guideDone">我已运行</button>
-      <a class="btn btn-line" href="install.ps1" download="install.ps1">改用下载 install.ps1</a>
-      <button class="btn btn-replay" type="button" id="guideClose">关闭</button>
-    </div>
+    <div class="guide-actions"><button class="btn btn-primary" type="button" id="guideDone">我已运行</button><a class="btn btn-line" href="install.ps1" download="install.ps1">改用下载 install.ps1</a><button class="btn btn-replay" type="button" id="guideClose">关闭</button></div>
   </div>
 </div>
 
@@ -709,7 +625,7 @@
 (function () {
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // 段落进入视口时上浮显示
+  // 段落进入视口时上浮显示（带交错延迟）
   const targets = document.querySelectorAll("[data-reveal]");
   if (!reduce && "IntersectionObserver" in window) {
     const io = new IntersectionObserver((entries) => {
@@ -718,7 +634,7 @@
         entry.target.classList.add("is-in");
         io.unobserve(entry.target);
       });
-    }, { rootMargin: "0px 0px -12% 0px", threshold: 0.15 });
+    }, { rootMargin: "0px 0px -10% 0px", threshold: 0.12 });
     targets.forEach((el) => io.observe(el));
   } else {
     targets.forEach((el) => el.classList.add("is-in"));
@@ -730,7 +646,24 @@
   onScroll();
   window.addEventListener("scroll", onScroll, { passive: true });
 
-  // 首屏动画重播：移除 .playing 复位，强制重排后再加回，动画从头播放
+  // 首屏板面视差：滚动时微微上移
+  const heroVisual = document.getElementById("heroVisual");
+  if (heroVisual && !reduce) {
+    let ticking = false;
+    window.addEventListener("scroll", () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          const scrollY = window.scrollY;
+          const maxTranslate = -60;
+          heroVisual.style.transform = `translateY(calc(-50% + ${Math.min(scrollY * 0.12, maxTranslate)}px))`;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }, { passive: true });
+  }
+
+  // 首屏动画重播
   const hero = document.querySelector(".hero");
   const replay = document.getElementById("replayHero");
   if (hero && replay) {
@@ -759,47 +692,27 @@
     stroke.style.strokeDashoffset = "0";
     stroke.style.strokeWidth = "18";
   }
-  // 一键安装：复制命令 → 弹出 PowerShell 运行引导；剪贴板不可用时降级为下载 ps1
+
+  // 一键安装：复制命令 → 弹出引导
   const INSTALL_CMD = "irm https://rejtech.github.io/SETBoard/install.ps1 | iex";
   const guide = document.getElementById("installGuide");
 
   async function copyText(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        const ok = document.execCommand("copy");
-        ta.remove();
-        return ok;
-      } catch {
-        return false;
-      }
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch (e) {
+      try { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); return ok; }
+      catch (e2) { return false; }
     }
   }
 
-  function downloadPs1() {
-    const a = document.createElement("a");
-    a.href = "install.ps1";
-    a.download = "install.ps1";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
+  function downloadPs1() { const a = document.createElement("a"); a.href = "install.ps1"; a.download = "install.ps1"; document.body.appendChild(a); a.click(); a.remove(); }
 
   function closeGuide() { guide.classList.remove("open"); }
 
   document.querySelectorAll("[data-install]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      if (await copyText(INSTALL_CMD)) {
-        guide.classList.add("open");
-      } else {
-        downloadPs1();
-      }
+      if (await copyText(INSTALL_CMD)) { guide.classList.add("open"); }
+      else { downloadPs1(); }
     });
   });
   document.getElementById("guideDone").addEventListener("click", closeGuide);
