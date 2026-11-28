@@ -229,7 +229,7 @@ public sealed partial class BoardCanvas
         }
 
         using var stream = new MemoryStream();
-        bitmap.Save(stream);
+        bitmap.Save(stream, (BitmapEncoderOptions?)null);
 
         return new ImageItem
         {

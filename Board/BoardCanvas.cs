@@ -553,7 +553,7 @@ public sealed partial class BoardCanvas : Control
 
         using var bitmap = new RenderTargetBitmap(new PixelSize(width, height), new Vector(96, 96));
         bitmap.Render(exportView);
-        bitmap.Save(stream);
+        bitmap.Save(stream, (BitmapEncoderOptions?)null);
     }
 
     /// <summary>离屏导出视图，直接按内容范围绘制。</summary>
